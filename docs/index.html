@@ -5,252 +5,287 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Protein Folding Bifurcation — Live Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Protein Folding Bifurcation — Morphic 2D World</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace; background: #06060d; color: #e0e0e0; min-height: 100vh; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #08080f; }
+  body { font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace; }
+  #world { position: fixed; inset: 0; overflow: hidden; cursor: default; touch-action: none; }
   
-  /* Header */
-  header { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid #1e1e2e; background: #0a0a14; }
-  header h1 { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
-  header h1 span { color: #00f0ff; }
-  header .subtitle { font-size: 11px; color: #666; margin-top: 2px; }
-  .live-indicator { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #00ff88; }
-  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #00ff88; animation: pulse 1.2s infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.3); } }
+  /* Morph base */
+  .morph { position: absolute; border-radius: 10px; box-shadow: 0 4px 24px rgba(0,0,0,0.5); user-select: none; -webkit-user-select: none; }
+  .morph .title-bar { height: 28px; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; border-radius: 10px 10px 0 0; cursor: grab; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; }
+  .morph .title-bar:active { cursor: grabbing; }
+  .morph .title-bar .close { width: 18px; height: 18px; border-radius: 50%; background: #ff4444; color: #fff; font-size: 12px; line-height: 18px; text-align: center; cursor: pointer; }
+  .morph .title-bar .close:hover { background: #ff6666; }
+  .morph .content { padding: 10px; overflow: auto; }
+  .morph .resize-handle { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; opacity: 0.4; }
+  .morph .resize-handle::after { content: ''; position: absolute; right: 4px; bottom: 4px; width: 10px; height: 10px; border-right: 2px solid #888; border-bottom: 2px solid #888; }
+  .morph.dragging { z-index: 1000 !important; box-shadow: 0 8px 40px rgba(0,240,255,0.3); }
+  .morph.selected { outline: 2px solid #00f0ff; outline-offset: 2px; }
 
-  /* Main layout: 3 columns */
-  .dashboard { display: grid; grid-template-columns: 1fr 420px 380px; gap: 0; height: calc(100vh - 57px); }
-  @media (max-width: 1200px) { .dashboard { grid-template-columns: 1fr 1fr; } .code-panel { display: none; } }
-  @media (max-width: 800px) { .dashboard { grid-template-columns: 1fr; height: auto; } }
+  /* Specific morph styles */
+  .morph-world-label { position: absolute; top: 10px; left: 12px; font-size: 11px; color: #555; pointer-events: none; z-index: 1; }
+  .morph-world-label strong { color: #00f0ff; }
+  .morph-energy { background: #0a0a16; border: 1px solid #1e1e2e; }
+  .morph-energy .title-bar { background: #12121f; color: #00f0ff; }
+  .morph-bif { background: #0a0a16; border: 1px solid #1e1e2e; }
+  .morph-bif .title-bar { background: #12121f; color: #00ff88; }
+  .morph-code { background: #0a0a16; border: 1px solid #ff00ff33; }
+  .morph-code .title-bar { background: #1a0a1a; color: #ff00ff; }
+  .morph-telemetry { background: #0a0a16; border: 1px solid #1e1e2e; }
+  .morph-telemetry .title-bar { background: #12121f; color: #ffaa00; }
+  .morph-controls { background: #0a0a16; border: 1px solid #1e1e2e; }
+  .morph-controls .title-bar { background: #12121f; color: #fff; }
 
-  /* Left: Visual */
-  .visual-panel { padding: 16px; overflow-y: auto; border-right: 1px solid #1e1e2e; }
-  .visual-panel h2 { font-size: 13px; color: #00f0ff; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
-  canvas { width: 100%; height: auto; border-radius: 10px; background: #08080f; border: 1px solid #1e1e2e; display: block; }
-  .canvas-label { font-size: 11px; color: #888; margin: 8px 0 16px; }
-  .controls-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
-  .btn { padding: 10px 18px; border-radius: 8px; border: none; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
-  .btn-primary { background: #00f0ff; color: #000; }
-  .btn-primary:hover { background: #33f5ff; }
-  .btn-secondary { background: #1a1a2e; color: #fff; border: 1px solid #2a2a3a; }
-  .btn-secondary:hover { background: #2a2a3a; }
-  .btn.active { background: #ff00ff; color: #fff; }
-  .slider-group { margin: 14px 0; }
-  .slider-group label { font-size: 11px; color: #aaa; display: flex; justify-content: space-between; margin-bottom: 6px; }
-  .slider-group label span { color: #00f0ff; font-weight: 700; }
-  .slider-group input[type=range] { width: 100%; accent-color: #00f0ff; height: 24px; }
-  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
-  .stat-card { background: #0a0a14; border: 1px solid #1e1e2e; border-radius: 8px; padding: 12px; }
-  .stat-card .label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
-  .stat-card .value { font-size: 22px; font-weight: 700; color: #fff; margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .stat-card .value.green { color: #00ff88; }
-  .stat-card .value.orange { color: #ffaa00; }
-  .stat-card .value.pink { color: #ff00ff; }
-  .stat-card .value.cyan { color: #00f0ff; }
-  .state-banner { margin-top: 14px; padding: 14px; border-radius: 8px; font-size: 13px; line-height: 1.6; }
-  .state-banner.unfolded { background: #1a0f00; border: 1px solid #ffaa0033; }
-  .state-banner.bifurcation { background: #1a001a; border: 1px solid #ff00ff33; }
-  .state-banner.folded { background: #001a0f; border: 1px solid #00ff8833; }
-
-  /* Middle: Code (LIVE) */
-  .code-panel { padding: 16px; overflow-y: auto; border-right: 1px solid #1e1e2e; background: #0a0a14; }
-  .code-panel h2 { font-size: 13px; color: #ff00ff; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
-  .lang-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
-  .lang-tab { padding: 8px 14px; border: 1px solid #2a2a3a; border-radius: 6px 6px 0 0; background: #12121f; color: #888; cursor: pointer; font-family: inherit; font-size: 11px; border-bottom: none; }
+  canvas { display: block; width: 100%; border-radius: 6px; background: #08080f; }
+  .lang-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+  .lang-tab { padding: 6px 12px; border: 1px solid #2a2a3a; border-radius: 6px 6px 0 0; background: #12121f; color: #888; cursor: pointer; font-family: inherit; font-size: 11px; border-bottom: none; }
   .lang-tab.active { background: #1a1a2e; color: #fff; border-color: #ff00ff; }
-  .code-editor { display: none; }
-  .code-editor.active { display: block; }
-  .code-editor textarea { width: 100%; height: 320px; background: #08080f; border: 1px solid #2a2a3a; border-radius: 8px; color: #d0d0d0; font-family: inherit; font-size: 12px; line-height: 1.7; padding: 12px; resize: vertical; }
-  .code-editor textarea:focus { outline: none; border-color: #ff00ff; }
-  .run-bar { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
-  .run-output { margin-top: 12px; background: #08080f; border: 1px solid #2a2a3a; border-radius: 8px; padding: 12px; font-size: 12px; line-height: 1.7; min-height: 80px; }
-  .run-output .ok { color: #00ff88; }
-  .run-output .err { color: #ff4444; }
-  .run-output .info { color: #888; }
-  .eval-note { font-size: 11px; color: #888; margin-top: 8px; line-height: 1.5; }
-
-  /* Right: Telemetry */
-  .telemetry-panel { padding: 16px; overflow-y: auto; background: #0a0a14; }
-  .telemetry-panel h2 { font-size: 13px; color: #ffaa00; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
-  .log { background: #08080f; border: 1px solid #1e1e2e; border-radius: 8px; padding: 10px; font-family: inherit; font-size: 11px; line-height: 1.8; max-height: 300px; overflow-y: auto; }
-  .log .entry { display: flex; gap: 8px; }
-  .log .time { color: #666; }
-  .log .msg { color: #ccc; }
-  .log .msg.hl { color: #00f0ff; }
-  .log .msg.warn { color: #ffaa00; }
-  .log .msg.crit { color: #ff00ff; }
-  .trajectory { margin-top: 16px; }
-  .trajectory h3 { font-size: 12px; color: #fff; margin-bottom: 8px; }
-  .trajectory canvas { height: 120px; }
-  .legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; font-size: 10px; color: #888; }
-  .legend-item { display: flex; align-items: center; gap: 5px; }
-  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
-  .protein-view { margin-top: 16px; }
-  .protein-view h3 { font-size: 12px; color: #fff; margin-bottom: 8px; }
-  .protein-view canvas { height: 160px; }
+  .code-area { display: none; }
+  .code-area.active { display: block; }
+  textarea { width: 100%; height: 180px; background: #08080f; border: 1px solid #2a2a3a; border-radius: 6px; color: #d0d0d0; font-family: inherit; font-size: 11px; line-height: 1.6; padding: 8px; resize: none; }
+  textarea:focus { outline: none; border-color: #ff00ff; }
+  .btn { padding: 8px 14px; border-radius: 6px; border: none; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+  .btn-primary { background: #00f0ff; color: #000; }
+  .btn-secondary { background: #1a1a2e; color: #fff; border: 1px solid #2a2a3a; }
+  .btn-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+  .slider-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 11px; }
+  .slider-row label { min-width: 80px; color: #aaa; }
+  .slider-row input { flex: 1; accent-color: #00f0ff; }
+  .slider-row span { color: #00f0ff; font-weight: 700; min-width: 50px; text-align: right; }
+  .stat-row { display: flex; gap: 8px; margin-top: 8px; }
+  .stat { flex: 1; background: #08080f; border: 1px solid #1e1e2e; border-radius: 6px; padding: 8px; text-align: center; }
+  .stat .lbl { font-size: 9px; color: #888; text-transform: uppercase; }
+  .stat .val { font-size: 18px; font-weight: 700; color: #fff; margin-top: 2px; }
+  .stat .val.green { color: #00ff88; }
+  .stat .val.cyan { color: #00f0ff; }
+  .stat .val.pink { color: #ff00ff; }
+  .log { background: #08080f; border: 1px solid #1e1e2e; border-radius: 6px; padding: 8px; font-size: 11px; line-height: 1.7; max-height: 180px; overflow-y: auto; }
+  .log .e { display: flex; gap: 6px; }
+  .log .t { color: #666; }
+  .log .m { color: #ccc; }
+  .log .m.hl { color: #00f0ff; }
+  .log .m.crit { color: #ff00ff; }
+  .run-out { margin-top: 8px; background: #08080f; border: 1px solid #2a2a3a; border-radius: 6px; padding: 8px; font-size: 11px; line-height: 1.6; min-height: 40px; }
+  .run-out .ok { color: #00ff88; }
+  .run-out .err { color: #ff4444; }
+  .run-out .info { color: #888; }
+  .hint { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); border: 1px solid #2a2a3a; border-radius: 20px; padding: 8px 16px; font-size: 11px; color: #888; z-index: 1001; pointer-events: none; }
+  .hint b { color: #00f0ff; }
 </style>
 </head>
 <body>
-<header>
-  <div>
-    <h1>Protein Folding <span>Bifurcation</span> — Live Dashboard</h1>
-    <div class="subtitle">E(x, λ) = x⁴ − λx² · Lean 4 verified, zero sorry · Code drives the visualization</div>
-  </div>
-  <div class="live-indicator"><div class="live-dot"></div> LIVE</div>
-</header>
+<div id="world">
+  <div class="morph-world-label"><strong>◉ Morphic World</strong> — Protein Folding Bifurcation · Drag morphs to move · Drag corner to resize · Double-click title to collapse</div>
 
-<div class="dashboard">
-  <!-- LEFT: VISUAL -->
-  <div class="visual-panel">
-    <h2>Energy Landscape — Live</h2>
-    <canvas id="energyCanvas" width="640" height="360"></canvas>
-    <div class="canvas-label">Energy curve morphs in real time as λ changes. Green dots = minima. Red = barrier. Cyan = current position.</div>
-
-    <h2>Bifurcation Diagram — Live</h2>
-    <canvas id="bifCanvas" width="640" height="240"></canvas>
-    <div class="canvas-label">Minima positions vs λ. Split at λ = 0 is the bifurcation. Watch the branches emerge.</div>
-
-    <div class="controls-row">
-      <button class="btn btn-primary" id="animateBtn" onclick="toggleAnimation()">▶ Auto-Animate Folding</button>
-      <button class="btn btn-secondary" onclick="resetView()">Reset</button>
-      <button class="btn btn-secondary" onclick="toggleTrace()">Trace: <span id="traceLabel">ON</span></button>
+  <!-- Energy Landscape Morph -->
+  <div class="morph morph-energy" id="morph-energy" style="left:20px;top:50px;width:560px;height:400px;z-index:10">
+    <div class="title-bar"><span>⚡ Energy Landscape — E(x, λ) = x⁴ − λx²</span><span class="close" onclick="closeMorph('morph-energy')">×</span></div>
+    <div class="content" style="height:calc(100% - 28px)">
+      <canvas id="energyCanvas" width="520" height="300"></canvas>
+      <div class="stat-row">
+        <div class="stat"><div class="lbl">Energy</div><div class="val cyan" id="energyVal">0.00</div></div>
+        <div class="stat"><div class="lbl">Minima</div><div class="val green" id="minimaCount">1</div></div>
+        <div class="stat"><div class="lbl">Min E</div><div class="val" id="minEnergy">0.00</div></div>
+        <div class="stat"><div class="lbl">Barrier</div><div class="val pink" id="barrierVal">0.00</div></div>
+      </div>
     </div>
-
-    <div class="slider-group">
-      <label>λ (control parameter — temperature / pH / denaturant) <span id="lambdaVal">-1.00</span></label>
-      <input type="range" id="lambdaSlider" min="-3" max="3" step="0.01" value="-1">
-    </div>
-    <div class="slider-group">
-      <label>x (reaction coordinate — RMSD from native) <span id="xVal">0.00</span></label>
-      <input type="range" id="xSlider" min="-2.5" max="2.5" step="0.01" value="0">
-    </div>
-    <div class="slider-group">
-      <label>Animation speed <span id="speedVal">1.0×</span></label>
-      <input type="range" id="speedSlider" min="0.1" max="3" step="0.1" value="1">
-    </div>
-
-    <div class="stats-grid">
-      <div class="stat-card"><div class="label">Energy E(x, λ)</div><div class="value cyan" id="energyVal">0.00</div></div>
-      <div class="stat-card"><div class="label">Minima Count</div><div class="value green" id="minimaCount">1</div></div>
-      <div class="stat-card"><div class="label">Min Energy</div><div class="value" id="minEnergy">0.00</div></div>
-      <div class="stat-card"><div class="label">Barrier Height</div><div class="value pink" id="barrierVal">0.00</div></div>
-    </div>
-
-    <div class="state-banner unfolded" id="stateBanner">
-      <strong>UNFOLDED (λ &lt; 0)</strong><br>Single minimum at x = 0. Protein is disordered. One basin.
-    </div>
+    <div class="resize-handle"></div>
   </div>
 
-  <!-- MIDDLE: LIVE CODE -->
-  <div class="code-panel">
-    <h2>Code — Live (Edit &amp; Run)</h2>
-    <p style="font-size:11px;color:#888;margin-bottom:12px">Edit the code below. Click Run. The visualization updates from YOUR code.</p>
-    
-    <div class="lang-tabs">
-      <button class="lang-tab active" onclick="showLang('self')">Self</button>
-      <button class="lang-tab" onclick="showLang('dylan')">Dylan</button>
-      <button class="lang-tab" onclick="showLang('swift')">Swift</button>
-      <button class="lang-tab" onclick="showLang('lean')">Lean</button>
+  <!-- Bifurcation Morph -->
+  <div class="morph morph-bif" id="morph-bif" style="left:600px;top:50px;width:420px;height:300px;z-index:11">
+    <div class="title-bar"><span>🌿 Bifurcation Diagram — Minima vs λ</span><span class="close" onclick="closeMorph('morph-bif')">×</span></div>
+    <div class="content" style="height:calc(100% - 28px)">
+      <canvas id="bifCanvas" width="380" height="220"></canvas>
+      <p style="font-size:11px;color:#888;margin-top:6px">Split at λ = 0 is the bifurcation. Watch branches emerge.</p>
     </div>
+    <div class="resize-handle"></div>
+  </div>
 
-    <div class="code-editor active" id="editor-self">
-      <textarea id="code-self" spellcheck="false">// Self: pitchfork energy prototype
-// Edit the exponent or coefficient, then Run.
-// The visualization uses YOUR energy function.
+  <!-- Controls Morph -->
+  <div class="morph morph-controls" id="morph-controls" style="left:20px;top:470px;width:560px;height:200px;z-index:12">
+    <div class="title-bar"><span>🎛 Controls</span><span class="close" onclick="closeMorph('morph-controls')">×</span></div>
+    <div class="content" style="height:calc(100% - 28px)">
+      <div class="btn-row">
+        <button class="btn btn-primary" id="animBtn" onclick="toggleAnimation()">▶ Auto-Animate</button>
+        <button class="btn btn-secondary" onclick="resetView()">Reset</button>
+        <button class="btn btn-secondary" onclick="spawnMorph()">+ New Morph</button>
+      </div>
+      <div class="slider-row"><label>λ (control)</label><input type="range" id="lambdaSlider" min="-3" max="3" step="0.01" value="-1"><span id="lambdaVal">-1.00</span></div>
+      <div class="slider-row"><label>x (position)</label><input type="range" id="xSlider" min="-2.5" max="2.5" step="0.01" value="0"><span id="xVal">0.00</span></div>
+      <div class="slider-row"><label>Speed</label><input type="range" id="speedSlider" min="0.1" max="3" step="0.1" value="1"><span id="speedVal">1.0×</span></div>
+      <div id="stateBanner" style="margin-top:8px;padding:10px;border-radius:6px;font-size:12px;line-height:1.5;background:#1a0f00;border:1px solid #ffaa0033"><strong>UNFOLDED (λ &lt; 0)</strong> — Single minimum at x = 0. Protein disordered.</div>
+    </div>
+    <div class="resize-handle"></div>
+  </div>
+
+  <!-- Code Morph (Self / Dylan) -->
+  <div class="morph morph-code" id="morph-code" style="left:600px;top:370px;width:460px;height:420px;z-index:13">
+    <div class="title-bar"><span>💜 Code — Self / Dylan (Live)</span><span class="close" onclick="closeMorph('morph-code')">×</span></div>
+    <div class="content" style="height:calc(100% - 28px)">
+      <div class="lang-tabs">
+        <button class="lang-tab active" onclick="showLang('self',event)">Self</button>
+        <button class="lang-tab" onclick="showLang('dylan',event)">Dylan</button>
+        <button class="lang-tab" onclick="showLang('swift',event)">Swift</button>
+      </div>
+      <div class="code-area active" id="area-self">
+        <textarea id="code-self" spellcheck="false">// Self: pitchfork energy prototype
+// Edit formula, Run → landscape updates.
 
 energy: x Lambda: lam = (
   (x ^ 4) - (lam * (x ^ 2))
 ).
 
-// Change ^4 to ^6 for a steeper well.
-// Change (lam * ...) to (2 * lam * ...) for stronger coupling.</textarea>
-    </div>
-
-    <div class="code-editor" id="editor-dylan">
-      <textarea id="code-dylan" spellcheck="false">// Dylan: pitchfork energy generic
-// Edit the formula, then Run.
+// Try: (x ^ 6) - (lam * (x ^ 2))
+// Try: (x ^ 4) - (2 * lam * (x ^ 2))</textarea>
+      </div>
+      <div class="code-area" id="area-dylan">
+        <textarea id="code-dylan" spellcheck="false">// Dylan: pitchfork energy generic
+// Edit formula, Run → landscape updates.
 
 define method pitchfork-energy
     (x :: <real>, lam :: <real>) => (e :: <real>)
   (x ^ 4) - (lam * (x ^ 2))
 end method;
 
-// Try: (x ^ 6) - (lam * (x ^ 2))
-// Try: (x ^ 4) - (lam * (x ^ 4))</textarea>
-    </div>
-
-    <div class="code-editor" id="editor-swift">
-      <textarea id="code-swift" spellcheck="false">// Swift: pitchfork energy struct
-// Edit the formula, then Run.
+// Try: (x ^ 6) - (lam * (x ^ 2))</textarea>
+      </div>
+      <div class="code-area" id="area-swift">
+        <textarea id="code-swift" spellcheck="false">// Swift: pitchfork energy
+// Edit formula, Run → landscape updates.
 
 func energy(at x: Double, lambda: Double) -> Double {
     pow(x, 4) - lambda * pow(x, 2)
 }
 
-// Try: pow(x, 6) - lambda * pow(x, 2)
-// Try: pow(x, 4) - lambda * pow(x, 4)</textarea>
+// Try: pow(x, 6) - lambda * pow(x, 2)</textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="runCode()">▶ Run → Update World</button>
+        <button class="btn btn-secondary" onclick="resetCode()">Reset</button>
+      </div>
+      <div class="run-out" id="runOutput"><span class="info">Edit code, click Run. The Morphic world updates from your code.</span></div>
     </div>
-
-    <div class="code-editor" id="editor-lean">
-      <textarea id="code-lean" spellcheck="false">-- Lean 4: pitchfork energy definition
--- This is the PROVED definition from the repo.
--- Edit to experiment (proof not re-checked live).
-
-def pitchforkEnergy (x lam : ℝ) : ℝ :=
-  x ^ 4 - lam * x ^ 2
-
--- Key identity (proved):
--- pitchforkEnergy x lam + lam ^ 2 / 4 = (x ^ 2 - lam / 2) ^ 2</textarea>
-    </div>
-
-    <div class="run-bar">
-      <button class="btn btn-primary" onclick="runCode()">▶ Run Code → Update Visual</button>
-      <button class="btn btn-secondary" onclick="resetCode()">Reset Code</button>
-    </div>
-
-    <div class="run-output" id="runOutput">
-      <span class="info">Click Run to evaluate your code and drive the visualization.</span>
-    </div>
-
-    <div class="eval-note">
-      <strong>How it works:</strong> The dashboard parses your code's energy formula (the <code>^</code> exponents and coefficients) and uses it to render the live landscape. Change the exponents, coefficients, or structure — the visualization follows.
-    </div>
+    <div class="resize-handle"></div>
   </div>
 
-  <!-- RIGHT: TELEMETRY -->
-  <div class="telemetry-panel">
-    <h2>Live Telemetry</h2>
-    <div class="log" id="eventLog"></div>
-
-    <div class="trajectory">
-      <h3>λ Trajectory (last 60s)</h3>
-      <canvas id="trajCanvas" width="340" height="120"></canvas>
+  <!-- Telemetry Morph -->
+  <div class="morph morph-telemetry" id="morph-telemetry" style="left:1080px;top:50px;width:340px;height:420px;z-index:14">
+    <div class="title-bar"><span>📡 Telemetry</span><span class="close" onclick="closeMorph('morph-telemetry')">×</span></div>
+    <div class="content" style="height:calc(100% - 28px)">
+      <div class="log" id="eventLog"></div>
+      <canvas id="trajCanvas" width="300" height="100" style="margin-top:10px"></canvas>
+      <p style="font-size:11px;color:#888;margin-top:6px">λ trajectory (last 60s)</p>
+      <canvas id="proteinCanvas" width="300" height="120" style="margin-top:10px"></canvas>
+      <p style="font-size:11px;color:#888;margin-top:6px">Protein conformation — dot falls into basin</p>
     </div>
-
-    <div class="protein-view">
-      <h3>Protein Conformation (2D projection)</h3>
-      <canvas id="proteinCanvas" width="340" height="160"></canvas>
-      <div class="legend">
-        <div class="legend-item"><div class="legend-dot" style="background:#00ff88"></div> Folded basin</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#ff4444"></div> Barrier</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#00f0ff"></div> Current</div>
-      </div>
-      <p style="font-size:11px;color:#888;margin-top:8px">The dot is the protein's position in conformation space. Watch it fall into a basin as λ increases.</p>
-    </div>
+    <div class="resize-handle"></div>
   </div>
 </div>
 
+<div class="hint"><b>Drag</b> morphs by title bar · <b>Drag corner</b> to resize · <b>Double-click</b> title to collapse · <b>×</b> to close</div>
+
 <script>
-// ===== STATE =====
-let lam = -1, xPos = 0, speed = 1;
-let animating = false, animId = null, traceOn = true;
-let energyFn = (x, l) => Math.pow(x, 4) - l * Math.pow(x, 2);
-let energyLabel = "x⁴ − λx²";
-let tracePoints = [];
-let lambdaHistory = [];
+// ===== MORPHIC WORLD =====
+let zTop = 20;
 let currentLang = 'self';
+let lam = -1, xPos = 0, speed = 1;
+let animating = false, animId = null;
+let energyFn = (x, l) => Math.pow(x, 4) - l * Math.pow(x, 2);
+let energyLabel = 'x⁴ − λx²';
+let lambdaHistory = [];
+let tracePoints = [];
+
+// --- Drag & Resize ---
+document.querySelectorAll('.morph').forEach(m => {
+  const bar = m.querySelector('.title-bar');
+  let dragging = false, startX, startY, startL, startT;
+  bar.addEventListener('mousedown', e => {
+    if (e.target.classList.contains('close')) return;
+    dragging = true;
+    startX = e.clientX; startY = e.clientY;
+    startL = m.offsetLeft; startT = m.offsetTop;
+    m.classList.add('dragging');
+    m.style.zIndex = ++zTop;
+    document.querySelectorAll('.morph').forEach(x => x.classList.remove('selected'));
+    m.classList.add('selected');
+    e.preventDefault();
+  });
+  bar.addEventListener('dblclick', () => {
+    const c = m.querySelector('.content');
+    c.style.display = c.style.display === 'none' ? '' : 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    m.style.left = Math.max(0, startL + e.clientX - startX) + 'px';
+    m.style.top = Math.max(0, startT + e.clientY - startY) + 'px';
+  });
+  document.addEventListener('mouseup', () => { dragging = false; m.classList.remove('dragging'); });
+  // touch
+  bar.addEventListener('touchstart', e => {
+    if (e.target.classList.contains('close')) return;
+    const t = e.touches[0];
+    dragging = true; startX = t.clientX; startY = t.clientY;
+    startL = m.offsetLeft; startT = m.offsetTop;
+    m.style.zIndex = ++zTop;
+  }, {passive: true});
+  document.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    const t = e.touches[0];
+    m.style.left = Math.max(0, startL + t.clientX - startX) + 'px';
+    m.style.top = Math.max(0, startT + t.clientY - startY) + 'px';
+  }, {passive: true});
+  document.addEventListener('touchend', () => { dragging = false; });
+  // resize
+  const rh = m.querySelector('.resize-handle');
+  if (rh) {
+    let resizing = false, rsX, rsY, rsW, rsH;
+    rh.addEventListener('mousedown', e => {
+      resizing = true; rsX = e.clientX; rsY = e.clientY;
+      rsW = m.offsetWidth; rsH = m.offsetHeight;
+      e.preventDefault(); e.stopPropagation();
+    });
+    document.addEventListener('mousemove', e => {
+      if (!resizing) return;
+      m.style.width = Math.max(200, rsW + e.clientX - rsX) + 'px';
+      m.style.height = Math.max(150, rsH + e.clientY - rsY) + 'px';
+      resizeCanvases();
+    });
+    document.addEventListener('mouseup', () => resizing = false);
+  }
+});
+
+function closeMorph(id) { document.getElementById(id).style.display = 'none'; }
+function spawnMorph() {
+  const id = 'morph-' + Date.now();
+  const div = document.createElement('div');
+  div.className = 'morph morph-energy';
+  div.id = id;
+  div.style.cssText = 'left:' + (100 + Math.random()*200) + 'px;top:' + (100 + Math.random()*200) + 'px;width:360px;height:240px;z-index:' + (++zTop);
+  div.innerHTML = '<div class="title-bar"><span>✦ New Morph — ' + id.slice(-4) + '</span><span class="close" onclick="closeMorph(\'' + id + '\')">×</span></div>' +
+    '<div class="content"><p style="font-size:12px;color:#aaa;line-height:1.6">A fresh morph in the world.<br>Drag it. Resize it. It lives.</p><canvas width="320" height="120"></canvas></div><div class="resize-handle"></div>';
+  document.getElementById('world').appendChild(div);
+  logEvent('New morph spawned: ' + id.slice(-4), 'hl');
+  // make draggable
+  const bar = div.querySelector('.title-bar');
+  let dragging = false, sx, sy, sl, st;
+  bar.addEventListener('mousedown', e => { if (e.target.classList.contains('close')) return; dragging = true; sx = e.clientX; sy = e.clientY; sl = div.offsetLeft; st = div.offsetTop; div.style.zIndex = ++zTop; e.preventDefault(); });
+  document.addEventListener('mousemove', e => { if (!dragging) return; div.style.left = Math.max(0, sl + e.clientX - sx) + 'px'; div.style.top = Math.max(0, st + e.clientY - sy) + 'px'; });
+  document.addEventListener('mouseup', () => dragging = false);
+  // draw mini energy in new morph
+  const c = div.querySelector('canvas');
+  const ctx = c.getContext('2d');
+  ctx.strokeStyle = '#00f0ff'; ctx.lineWidth = 2; ctx.beginPath();
+  for (let px = 0; px < c.width; px++) {
+    const x = -2.5 + (px / c.width) * 5;
+    const y = c.height - 20 - ((energy(x, lam) + 1) / 3) * (c.height - 40);
+    if (px === 0) ctx.moveTo(px, y); else ctx.lineTo(px, y);
+  }
+  ctx.stroke();
+}
 
 // ===== CANVASES =====
 const eCanvas = document.getElementById('energyCanvas');
@@ -262,59 +297,56 @@ const bctx = bCanvas.getContext('2d');
 const tctx = tCanvas.getContext('2d');
 const pctx = pCanvas.getContext('2d');
 
-// ===== ENERGY =====
+function resizeCanvases() {
+  [eCanvas, bCanvas, tCanvas, pCanvas].forEach(c => {
+    const r = c.getBoundingClientRect();
+    c.width = r.width; c.height = r.height;
+  });
+  update();
+}
+
 function energy(x, l) { return energyFn(x, l); }
 
-// ===== DRAW ENERGY LANDSCAPE =====
 function drawEnergy() {
   const W = eCanvas.width, H = eCanvas.height;
   ectx.clearRect(0, 0, W, H);
-  // fade trace
-  if (traceOn) {
-    ectx.fillStyle = 'rgba(8,8,15,0.15)';
-    ectx.fillRect(0, 0, W, H);
-  }
-  // axes
   ectx.strokeStyle = '#1e1e2e'; ectx.lineWidth = 1;
-  ectx.beginPath(); ectx.moveTo(40, H-40); ectx.lineTo(W-20, H-40); ectx.stroke();
-  ectx.beginPath(); ectx.moveTo(40, 20); ectx.lineTo(40, H-40); ectx.stroke();
+  ectx.beginPath(); ectx.moveTo(40, H-30); ectx.lineTo(W-15, H-30); ectx.stroke();
+  ectx.beginPath(); ectx.moveTo(40, 15); ectx.lineTo(40, H-30); ectx.stroke();
   ectx.fillStyle = '#888'; ectx.font = '11px monospace';
-  ectx.fillText('x', W-30, H-25);
-  ectx.fillText('E', 22, 30);
-  ectx.fillText(energyLabel, W-160, 28);
-  // compute range
+  ectx.fillText('x', W-25, H-15);
+  ectx.fillText('E', 22, 25);
+  ectx.fillText(energyLabel, W-150, 22);
   const xMin = -2.5, xMax = 2.5;
   let eMin = Infinity, eMax = -Infinity;
-  for (let px = 40; px < W-20; px += 2) {
-    const x = xMin + (px-40)/(W-60) * (xMax-xMin);
+  for (let px = 40; px < W-15; px += 2) {
+    const x = xMin + (px-40)/(W-55) * (xMax-xMin);
     const e = energy(x, lam);
     if (isFinite(e)) { if (e < eMin) eMin = e; if (e > eMax) eMax = e; }
   }
   if (!isFinite(eMin)) { eMin = -1; eMax = 1; }
   eMax = Math.max(eMax, 1); eMin = Math.min(eMin, -1);
-  const yFor = (e) => (H-40) - ((e - eMin)/(eMax-eMin)) * (H-80);
-  const xFor = (x) => 40 + ((x - xMin)/(xMax-xMin)) * (W-60);
-  // gradient fill under curve
-  ectx.beginPath();
-  ectx.moveTo(40, H-40);
-  for (let px = 40; px <= W-20; px += 2) {
-    const x = xMin + (px-40)/(W-60) * (xMax-xMin);
+  const yFor = (e) => (H-30) - ((e - eMin)/(eMax-eMin)) * (H-55);
+  const xFor = (x) => 40 + ((x - xMin)/(xMax-xMin)) * (W-55);
+  // fill
+  ectx.beginPath(); ectx.moveTo(40, H-30);
+  for (let px = 40; px <= W-15; px += 2) {
+    const x = xMin + (px-40)/(W-55) * (xMax-xMin);
     ectx.lineTo(px, yFor(energy(x, lam)));
   }
-  ectx.lineTo(W-20, H-40); ectx.closePath();
-  const grad = ectx.createLinearGradient(0, 20, 0, H-40);
-  grad.addColorStop(0, 'rgba(0,240,255,0.15)');
-  grad.addColorStop(1, 'rgba(0,240,255,0)');
+  ectx.lineTo(W-15, H-30); ectx.closePath();
+  const grad = ectx.createLinearGradient(0, 15, 0, H-30);
+  grad.addColorStop(0, 'rgba(0,240,255,0.15)'); grad.addColorStop(1, 'rgba(0,240,255,0)');
   ectx.fillStyle = grad; ectx.fill();
   // curve
   ectx.strokeStyle = '#00f0ff'; ectx.lineWidth = 2.5; ectx.beginPath();
-  for (let px = 40; px <= W-20; px += 2) {
-    const x = xMin + (px-40)/(W-60) * (xMax-xMin);
+  for (let px = 40; px <= W-15; px += 2) {
+    const x = xMin + (px-40)/(W-55) * (xMax-xMin);
     const y = yFor(energy(x, lam));
     if (px === 40) ectx.moveTo(px, y); else ectx.lineTo(px, y);
   }
   ectx.stroke();
-  // minima / barrier markers (for standard pitchfork)
+  // markers
   if (lam > 0.01) {
     const s = Math.sqrt(lam/2);
     [[s, '#00ff88', 7], [-s, '#00ff88', 7], [0, '#ff4444', 6]].forEach(([mx, col, r]) => {
@@ -325,54 +357,36 @@ function drawEnergy() {
   } else if (lam < -0.01) {
     ectx.fillStyle = '#ffaa00'; ectx.beginPath();
     ectx.arc(xFor(0), yFor(energy(0, lam)), 7, 0, Math.PI*2); ectx.fill();
-    ectx.strokeStyle = '#000'; ectx.lineWidth = 2; ectx.stroke();
   } else {
     ectx.fillStyle = '#ff00ff'; ectx.beginPath();
     ectx.arc(xFor(0), yFor(energy(0, lam)), 9, 0, Math.PI*2); ectx.fill();
-    ectx.strokeStyle = '#fff'; ectx.lineWidth = 1.5; ectx.stroke();
   }
-  // current position with glow
+  // current pos with glow
   const cx = xFor(xPos), cy = yFor(energy(xPos, lam));
   const glow = ectx.createRadialGradient(cx, cy, 0, cx, cy, 18);
-  glow.addColorStop(0, 'rgba(0,240,255,0.6)');
-  glow.addColorStop(1, 'rgba(0,240,255,0)');
+  glow.addColorStop(0, 'rgba(0,240,255,0.6)'); glow.addColorStop(1, 'rgba(0,240,255,0)');
   ectx.fillStyle = glow; ectx.beginPath(); ectx.arc(cx, cy, 18, 0, Math.PI*2); ectx.fill();
   ectx.fillStyle = '#00f0ff'; ectx.beginPath(); ectx.arc(cx, cy, 6, 0, Math.PI*2); ectx.fill();
   ectx.strokeStyle = '#fff'; ectx.lineWidth = 1.5; ectx.stroke();
-  // trace
-  if (traceOn) {
-    tracePoints.push({x: xPos, y: energy(xPos, lam)});
-    if (tracePoints.length > 120) tracePoints.shift();
-    ectx.strokeStyle = 'rgba(0,240,255,0.3)'; ectx.lineWidth = 1;
-    ectx.beginPath();
-    tracePoints.forEach((p, i) => {
-      const px = xFor(p.x), py = yFor(p.y);
-      if (i === 0) ectx.moveTo(px, py); else ectx.lineTo(px, py);
-    });
-    ectx.stroke();
-  }
 }
 
-// ===== DRAW BIFURCATION =====
 function drawBif() {
   const W = bCanvas.width, H = bCanvas.height;
   bctx.clearRect(0, 0, W, H);
   bctx.strokeStyle = '#1e1e2e'; bctx.lineWidth = 1;
-  bctx.beginPath(); bctx.moveTo(40, H-40); bctx.lineTo(W-20, H-40); bctx.stroke();
-  bctx.beginPath(); bctx.moveTo(40, 20); bctx.lineTo(40, H-40); bctx.stroke();
+  bctx.beginPath(); bctx.moveTo(40, H-30); bctx.lineTo(W-15, H-30); bctx.stroke();
+  bctx.beginPath(); bctx.moveTo(40, 15); bctx.lineTo(40, H-30); bctx.stroke();
   bctx.fillStyle = '#888'; bctx.font = '11px monospace';
-  bctx.fillText('λ', W-30, H-25);
-  bctx.fillText('x (minima)', 22, 30);
+  bctx.fillText('λ', W-25, H-15);
+  bctx.fillText('x', 22, 25);
   const lMin = -3, lMax = 3, xMin = -1.5, xMax = 1.5;
-  const xFor = (l) => 40 + ((l - lMin)/(lMax-lMin)) * (W-60);
-  const yFor = (x) => (H-40) - ((x - xMin)/(xMax-xMin)) * (H-80);
-  // unfolded branch
+  const xFor = (l) => 40 + ((l - lMin)/(lMax-lMin)) * (W-55);
+  const yFor = (x) => (H-30) - ((x - xMin)/(xMax-xMin)) * (H-55);
   bctx.strokeStyle = '#ffaa00'; bctx.lineWidth = 3; bctx.beginPath();
   bctx.moveTo(xFor(-3), yFor(0)); bctx.lineTo(xFor(0), yFor(0)); bctx.stroke();
-  // folded branches
   bctx.strokeStyle = '#00ff88'; bctx.beginPath();
   for (let px = xFor(0); px <= xFor(3); px += 2) {
-    const l = lMin + (px-40)/(W-60) * (lMax-lMin);
+    const l = lMin + (px-40)/(W-55) * (lMax-lMin);
     if (l <= 0) continue;
     const y = yFor(Math.sqrt(l/2));
     if (px <= xFor(0)+2) bctx.moveTo(px, y); else bctx.lineTo(px, y);
@@ -380,25 +394,21 @@ function drawBif() {
   bctx.stroke();
   bctx.strokeStyle = '#00ff88'; bctx.beginPath();
   for (let px = xFor(0); px <= xFor(3); px += 2) {
-    const l = lMin + (px-40)/(W-60) * (lMax-lMin);
+    const l = lMin + (px-40)/(W-55) * (lMax-lMin);
     if (l <= 0) continue;
     const y = yFor(-Math.sqrt(l/2));
     if (px <= xFor(0)+2) bctx.moveTo(px, y); else bctx.lineTo(px, y);
   }
   bctx.stroke();
-  // barrier dashed
   bctx.strokeStyle = '#ff4444'; bctx.lineWidth = 2; bctx.setLineDash([5,5]); bctx.beginPath();
   bctx.moveTo(xFor(0), yFor(0)); bctx.lineTo(xFor(3), yFor(0)); bctx.stroke();
   bctx.setLineDash([]);
-  // current λ marker
   bctx.fillStyle = '#00f0ff'; bctx.beginPath();
-  bctx.arc(xFor(lam), H-40, 6, 0, Math.PI*2); bctx.fill();
-  // bifurcation point
+  bctx.arc(xFor(lam), H-30, 6, 0, Math.PI*2); bctx.fill();
   bctx.fillStyle = '#ff00ff'; bctx.beginPath();
   bctx.arc(xFor(0), yFor(0), 6, 0, Math.PI*2); bctx.fill();
 }
 
-// ===== DRAW TRAJECTORY =====
 function drawTraj() {
   const W = tCanvas.width, H = tCanvas.height;
   tctx.clearRect(0, 0, W, H);
@@ -408,44 +418,34 @@ function drawTraj() {
   tctx.strokeStyle = '#00f0ff'; tctx.lineWidth = 1.5; tctx.beginPath();
   lambdaHistory.forEach((l, i) => {
     const x = (i / (lambdaHistory.length - 1)) * W;
-    const y = H/2 - (l / 3) * (H/2 - 10);
+    const y = H/2 - (l / 3) * (H/2 - 8);
     if (i === 0) tctx.moveTo(x, y); else tctx.lineTo(x, y);
   });
   tctx.stroke();
-  // current dot
-  const last = lambdaHistory[lambdaHistory.length - 1];
-  tctx.fillStyle = '#ff00ff'; tctx.beginPath();
-  tctx.arc(W - 4, H/2 - (last/3)*(H/2-10), 4, 0, Math.PI*2); tctx.fill();
 }
 
-// ===== DRAW PROTEIN =====
 function drawProtein() {
   const W = pCanvas.width, H = pCanvas.height;
   pctx.clearRect(0, 0, W, H);
-  // basins
   const basinY = H/2;
   if (lam > 0) {
     const s = Math.sqrt(lam/2);
     const bx1 = W/2 - (s/2.5) * W/2;
     const bx2 = W/2 + (s/2.5) * W/2;
-    // folded basin
-    let g = pctx.createRadialGradient(bx1, basinY, 0, bx1, basinY, 50);
+    let g = pctx.createRadialGradient(bx1, basinY, 0, bx1, basinY, 45);
     g.addColorStop(0, 'rgba(0,255,136,0.4)'); g.addColorStop(1, 'rgba(0,255,136,0)');
-    pctx.fillStyle = g; pctx.beginPath(); pctx.arc(bx1, basinY, 50, 0, Math.PI*2); pctx.fill();
-    // misfolded basin
-    g = pctx.createRadialGradient(bx2, basinY, 0, bx2, basinY, 50);
+    pctx.fillStyle = g; pctx.beginPath(); pctx.arc(bx1, basinY, 45, 0, Math.PI*2); pctx.fill();
+    g = pctx.createRadialGradient(bx2, basinY, 0, bx2, basinY, 45);
     g.addColorStop(0, 'rgba(255,170,0,0.3)'); g.addColorStop(1, 'rgba(255,170,0,0)');
-    pctx.fillStyle = g; pctx.beginPath(); pctx.arc(bx2, basinY, 50, 0, Math.PI*2); pctx.fill();
-    // barrier
-    g = pctx.createRadialGradient(W/2, basinY, 0, W/2, basinY, 30);
+    pctx.fillStyle = g; pctx.beginPath(); pctx.arc(bx2, basinY, 45, 0, Math.PI*2); pctx.fill();
+    g = pctx.createRadialGradient(W/2, basinY, 0, W/2, basinY, 28);
     g.addColorStop(0, 'rgba(255,68,68,0.5)'); g.addColorStop(1, 'rgba(255,68,68,0)');
-    pctx.fillStyle = g; pctx.beginPath(); pctx.arc(W/2, basinY, 30, 0, Math.PI*2); pctx.fill();
+    pctx.fillStyle = g; pctx.beginPath(); pctx.arc(W/2, basinY, 28, 0, Math.PI*2); pctx.fill();
   } else {
-    const g = pctx.createRadialGradient(W/2, basinY, 0, W/2, basinY, 60);
+    const g = pctx.createRadialGradient(W/2, basinY, 0, W/2, basinY, 55);
     g.addColorStop(0, 'rgba(255,170,0,0.4)'); g.addColorStop(1, 'rgba(255,170,0,0)');
-    pctx.fillStyle = g; pctx.beginPath(); pctx.arc(W/2, basinY, 60, 0, Math.PI*2); pctx.fill();
+    pctx.fillStyle = g; pctx.beginPath(); pctx.arc(W/2, basinY, 55, 0, Math.PI*2); pctx.fill();
   }
-  // protein dot (jittered by energy)
   const px = W/2 + (xPos / 2.5) * (W/2) + (Math.random()-0.5)*2;
   const py = basinY + (Math.random()-0.5)*4 + Math.sin(Date.now()/300)*2;
   const glow = pctx.createRadialGradient(px, py, 0, px, py, 16);
@@ -455,7 +455,6 @@ function drawProtein() {
   pctx.strokeStyle = '#fff'; pctx.lineWidth = 1.5; pctx.stroke();
 }
 
-// ===== UPDATE ALL =====
 function update() {
   document.getElementById('lambdaVal').textContent = lam.toFixed(2);
   document.getElementById('xVal').textContent = xPos.toFixed(2);
@@ -464,29 +463,26 @@ function update() {
   document.getElementById('energyVal').textContent = isFinite(e) ? e.toFixed(3) : '∞';
   const count = lam < -0.01 ? 1 : (lam > 0.01 ? 2 : 1);
   document.getElementById('minimaCount').textContent = count;
-  const minE = lam > 0 ? -lam*lam/4 : 0;
-  document.getElementById('minEnergy').textContent = minE.toFixed(3);
+  document.getElementById('minEnergy').textContent = lam > 0 ? (-lam*lam/4).toFixed(3) : '0.00';
   document.getElementById('barrierVal').textContent = lam > 0 ? (lam*lam/4).toFixed(3) : '0.00';
   const banner = document.getElementById('stateBanner');
   if (lam < -0.01) {
-    banner.className = 'state-banner unfolded';
-    banner.innerHTML = '<strong>UNFOLDED (λ &lt; 0)</strong><br>Single minimum at x = 0. Protein is disordered. One basin.';
+    banner.style.background = '#1a0f00'; banner.style.border = '1px solid #ffaa0033';
+    banner.innerHTML = '<strong>UNFOLDED (λ &lt; 0)</strong> — Single minimum at x = 0. Protein disordered.';
   } else if (lam > 0.01) {
-    banner.className = 'state-banner folded';
-    banner.innerHTML = '<strong>FOLDED / MISFOLDED (λ &gt; 0)</strong><br>Two minima at x = ±√(λ/2) = ±' + Math.sqrt(lam/2).toFixed(3) + '. Barrier height ' + (lam*lam/4).toFixed(3) + '. Protein must choose a branch.';
+    banner.style.background = '#001a0f'; banner.style.border = '1px solid #00ff8833';
+    banner.innerHTML = '<strong>FOLDED / MISFOLDED (λ &gt; 0)</strong> — Two minima at x = ±' + Math.sqrt(lam/2).toFixed(3) + '. Barrier ' + (lam*lam/4).toFixed(3) + '.';
   } else {
-    banner.className = 'state-banner bifurcation';
-    banner.innerHTML = '<strong>BIFURCATION (λ = 0)</strong><br>The landscape is about to split. One minimum becomes two. Critical point.';
+    banner.style.background = '#1a001a'; banner.style.border = '1px solid #ff00ff33';
+    banner.innerHTML = '<strong>BIFURCATION (λ = 0)</strong> — Landscape about to split. Critical point.';
   }
   drawEnergy(); drawBif(); drawTraj(); drawProtein();
 }
 
-// ===== ANIMATION LOOP =====
 function animLoop() {
   if (!animating) return;
   lam += 0.02 * speed;
   if (lam > 3) lam = -3;
-  // protein drifts toward nearest minimum
   if (lam > 0.1) {
     const target = xPos >= 0 ? Math.sqrt(lam/2) : -Math.sqrt(lam/2);
     xPos += (target - xPos) * 0.05;
@@ -497,7 +493,6 @@ function animLoop() {
   document.getElementById('xSlider').value = xPos;
   lambdaHistory.push(lam);
   if (lambdaHistory.length > 120) lambdaHistory.shift();
-  // log bifurcation crossing
   if (Math.abs(lam) < 0.05 && Math.abs(lambdaHistory[lambdaHistory.length-2] || 0) >= 0.05) {
     logEvent('BIFURCATION CROSSED at λ ≈ 0', 'crit');
   }
@@ -507,93 +502,70 @@ function animLoop() {
 
 function toggleAnimation() {
   animating = !animating;
-  const btn = document.getElementById('animateBtn');
-  btn.textContent = animating ? '⏸ Pause Animation' : '▶ Auto-Animate Folding';
-  btn.classList.toggle('active', animating);
-  if (animating) { logEvent('Animation started — folding in progress', 'hl'); animLoop(); }
-  else { logEvent('Animation paused', 'info'); cancelAnimationFrame(animId); }
+  const btn = document.getElementById('animBtn');
+  btn.textContent = animating ? '⏸ Pause' : '▶ Auto-Animate';
+  if (animating) { logEvent('Animation started', 'hl'); animLoop(); }
+  else { logEvent('Animation paused', ''); cancelAnimationFrame(animId); }
 }
 
 function resetView() {
-  lam = -1; xPos = 0; tracePoints = []; lambdaHistory = [];
+  lam = -1; xPos = 0; lambdaHistory = []; tracePoints = [];
   document.getElementById('lambdaSlider').value = -1;
   document.getElementById('xSlider').value = 0;
-  logEvent('View reset', 'info');
+  logEvent('View reset', '');
   update();
 }
 
-function toggleTrace() {
-  traceOn = !traceOn;
-  document.getElementById('traceLabel').textContent = traceOn ? 'ON' : 'OFF';
-  if (!traceOn) tracePoints = [];
-  update();
-}
-
-// ===== LOG =====
 function logEvent(msg, cls) {
   const log = document.getElementById('eventLog');
   const time = new Date().toLocaleTimeString('en-US', {hour12: false});
   const div = document.createElement('div');
-  div.className = 'entry';
-  div.innerHTML = '<span class="time">' + time + '</span><span class="msg ' + (cls || '') + '">' + msg + '</span>';
+  div.className = 'e';
+  div.innerHTML = '<span class="t">' + time + '</span><span class="m ' + (cls || '') + '">' + msg + '</span>';
   log.prepend(div);
   while (log.children.length > 50) log.removeChild(log.lastChild);
 }
 
-// ===== CODE RUNNER =====
-function showLang(lang) {
+function showLang(lang, ev) {
   currentLang = lang;
   document.querySelectorAll('.lang-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.code-editor').forEach(e => e.classList.remove('active'));
-  event.target.classList.add('active');
-  document.getElementById('editor-' + lang).classList.add('active');
+  document.querySelectorAll('.code-area').forEach(a => a.classList.remove('active'));
+  ev.target.classList.add('active');
+  document.getElementById('area-' + lang).classList.add('active');
 }
 
 function runCode() {
   const code = document.getElementById('code-' + currentLang).value;
   const out = document.getElementById('runOutput');
   try {
-    // Parse energy formula: look for pattern like (x ^ N) - (lam * (x ^ M))
-    // or pow(x, N) - lambda * pow(x, M)
     let n = 4, m = 2, coeff = 1;
-    // Self/Dylan: (x ^ 4) - (lam * (x ^ 2))
     let match = code.match(/x\s*\^\s*(\d+).*?lam\w*\s*\*\s*\(?x\s*\^\s*(\d+)/s);
     if (match) { n = parseInt(match[1]); m = parseInt(match[2]); }
-    // Swift: pow(x, 4) - lambda * pow(x, 2)
     match = code.match(/pow\s*\(\s*x\s*,\s*(\d+)\s*\).*?lambda\s*\*\s*pow\s*\(\s*x\s*,\s*(\d+)/s);
     if (match) { n = parseInt(match[1]); m = parseInt(match[2]); }
-    // Lean: x ^ 4 - lam * x ^ 2
-    match = code.match(/x\s*\^\s*(\d+)\s*-\s*lam\s*\*\s*x\s*\^\s*(\d+)/);
-    if (match) { n = parseInt(match[1]); m = parseInt(match[2]); }
-    // Optional coefficient: (2 * lam * ...) or (lam * 2 * ...)
     const coeffMatch = code.match(/(\d+)\s*\*\s*lam/);
     if (coeffMatch) coeff = parseInt(coeffMatch[1]);
-    
-    if (n <= m) throw new Error('Exponent of x^' + n + ' must be > exponent of x^' + m + ' for a pitchfork');
+    if (n <= m) throw new Error('x^' + n + ' must be > x^' + m + ' for pitchfork');
     if (n > 8 || m > 8) throw new Error('Exponents too large (max 8)');
-    
     energyFn = (x, l) => Math.pow(x, n) - coeff * l * Math.pow(x, m);
     energyLabel = 'x^' + n + ' − ' + (coeff > 1 ? coeff + '·' : '') + 'λx^' + m;
-    
-    out.innerHTML = '<span class="ok">✓ Parsed: E(x, λ) = x^' + n + ' − ' + (coeff > 1 ? coeff + '·' : '') + 'λx^' + m + '</span><br>' +
-      '<span class="info">Language: ' + currentLang + ' · Visualization updated. Minima now at x = ±(λ·' + coeff + '/' + n + ')^(1/' + (n-m) + ')</span>';
+    out.innerHTML = '<span class="ok">✓ E(x, λ) = x^' + n + ' − ' + (coeff > 1 ? coeff + '·' : '') + 'λx^' + m + '</span><br><span class="info">Language: ' + currentLang + ' · World updated.</span>';
     logEvent('Code executed (' + currentLang + '): E = x^' + n + ' − ' + coeff + 'λx^' + m, 'hl');
     update();
   } catch (err) {
-    out.innerHTML = '<span class="err">✗ Error: ' + err.message + '</span><br><span class="info">Check your formula syntax.</span>';
-    logEvent('Code error (' + currentLang + '): ' + err.message, 'warn');
+    out.innerHTML = '<span class="err">✗ ' + err.message + '</span>';
+    logEvent('Code error: ' + err.message, 'crit');
   }
 }
 
 function resetCode() {
   energyFn = (x, l) => Math.pow(x, 4) - l * Math.pow(x, 2);
   energyLabel = 'x⁴ − λx²';
-  document.getElementById('runOutput').innerHTML = '<span class="info">Reset to default: E(x, λ) = x⁴ − λx²</span>';
-  logEvent('Code reset to default', 'info');
+  document.getElementById('runOutput').innerHTML = '<span class="info">Reset: E = x⁴ − λx²</span>';
+  logEvent('Code reset', '');
   update();
 }
 
-// ===== EVENTS =====
 document.getElementById('lambdaSlider').addEventListener('input', (e) => {
   lam = parseFloat(e.target.value);
   lambdaHistory.push(lam);
@@ -603,12 +575,12 @@ document.getElementById('lambdaSlider').addEventListener('input', (e) => {
 document.getElementById('xSlider').addEventListener('input', (e) => { xPos = parseFloat(e.target.value); update(); });
 document.getElementById('speedSlider').addEventListener('input', (e) => { speed = parseFloat(e.target.value); update(); });
 
-// ===== INIT =====
-logEvent('Dashboard initialized — Lean proof loaded', 'hl');
-logEvent('Energy: E(x, λ) = x⁴ − λx²', 'info');
-logEvent('Ready. Click ▶ to animate folding.', 'info');
+window.addEventListener('resize', resizeCanvases);
+resizeCanvases();
+logEvent('Morphic world loaded — Self + Dylan', 'hl');
+logEvent('Drag morphs by title bar. Double-click to collapse.', '');
+logEvent('Ready. Click ▶ to animate.', '');
 update();
-// Auto-start animation after 1s so the page is MOVING on load
 setTimeout(() => { if (!animating) toggleAnimation(); }, 1000);
 </script>
 </body>
