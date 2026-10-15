@@ -6,7 +6,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>Protein Folding Bifurcation — DNA Double Helix</title>
+<title>Protein Folding Bifurcation — 3D α-Helix</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -75,6 +75,7 @@
   .run-out .err { color: #ff4444; }
   .run-out .info { color: #888; }
 
+  #landscape { position:absolute; right:20px; bottom:110px; z-index:10; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.1); border-radius:10px; }
   .hint { position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 10; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 8px 16px; font-size: 11px; color: #888; pointer-events: none; white-space: nowrap; backdrop-filter: blur(8px); }
   .hint b { color: #00f0ff; }
 
@@ -82,7 +83,8 @@
     .top-left h1 { font-size: 16px; }
     .state-banner { display: none; }
     .stats { display: none; }
-    .hint { display: none; }
+    #landscape { position:absolute; right:20px; bottom:110px; z-index:10; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.1); border-radius:10px; }
+  .hint { display: none; }
   }
 </style>
 </head>
@@ -92,27 +94,27 @@
 
   <!-- Top left: title -->
   <div class="overlay top-left">
-    <h1>Protein Folding <span>Bifurcation</span> — Double Helix</h1>
-    <p>E(x, λ) = x⁴ − λx² · Two strands wind into a double helix as λ crosses 0</p>
+    <h1>Protein Folding <span>Bifurcation</span> — α-Helix</h1>
+    <p>E(x, λ) = x⁴ − λx² · The backbone winds into an α-helix as λ crosses 0</p>
   </div>
 
   <!-- Top right: live badge -->
   <div class="overlay top-right">
-    <div class="live-badge"><div class="live-dot"></div> LIVE · Lean 4 Verified · Zero Sorry</div>
+    <div class="live-badge"><div class="live-dot"></div> LIVE · Lean 4 · 11 theorems · Zero sorry</div>
   </div>
 
   <!-- State banner -->
   <div class="state-banner unfolded" id="stateBanner">
-    <strong>UNWOUND (λ &lt; 0)</strong>
-    Strands separated. No helix. Denatured.
+    <strong>UNFOLDED (λ &lt; 0)</strong>
+    Random coil. One minimum at x = 0. Denatured.
   </div>
 
   <!-- Stats -->
   <div class="stats">
     <div class="stat-card"><div class="lbl">λ (Control)</div><div class="val cyan" id="lambdaStat">-1.00</div></div>
     <div class="stat-card"><div class="lbl">Helix Turns</div><div class="val green" id="turnsStat">0.0</div></div>
-    <div class="stat-card"><div class="lbl">Base Pairs</div><div class="val" id="pairsStat">0</div></div>
-    <div class="stat-card"><div class="lbl">Energy</div><div class="val orange" id="energyStat">0.00</div></div>
+    <div class="stat-card"><div class="lbl">Order x*</div><div class="val" id="pairsStat">0.00</div></div>
+    <div class="stat-card"><div class="lbl">Min Energy E(x*)</div><div class="val orange" id="energyStat">0.00</div></div>
   </div>
 
   <!-- Code toggle -->
@@ -122,25 +124,25 @@
 
   <!-- Code panel -->
   <div class="code-panel" id="codePanel">
-    <h3>Code — Edit & Run (drives the helix)</h3>
+    <h3>Code — Edit &amp; Run (drives the helix)</h3>
     <div class="lang-tabs">
       <button class="lang-tab active" onclick="showLang('self',event)">Self</button>
       <button class="lang-tab" onclick="showLang('dylan',event)">Dylan</button>
       <button class="lang-tab" onclick="showLang('swift',event)">Swift</button>
     </div>
     <div class="code-area active" id="area-self">
-      <textarea id="code-self" spellcheck="false">// Self: double helix + pitchfork energy
+      <textarea id="code-self" spellcheck="false">// Self: α-helix + pitchfork energy
 // Edit formula, Run → helix updates.
 
 energy: x Lambda: lam = (
   (x ^ 4) - (lam * (x ^ 2))
 ).
 
-// Helix: two strands, phase offset π.
-// λ < 0: strands apart. λ > 0: strands wind.</textarea>
+// Helix: x* = +√(λ/2) right-handed (folded),
+// x* = −√(λ/2) left-handed (misfolded).</textarea>
     </div>
     <div class="code-area" id="area-dylan">
-      <textarea id="code-dylan" spellcheck="false">// Dylan: double helix + pitchfork energy
+      <textarea id="code-dylan" spellcheck="false">// Dylan: α-helix + pitchfork energy
 // Edit formula, Run → helix updates.
 
 define method pitchfork-energy
@@ -148,22 +150,19 @@ define method pitchfork-energy
   (x ^ 4) - (lam * (x ^ 2))
 end method;
 
-define method strand-separation
-    (lam :: <real>) => (d :: <real>)
-  if (lam < 0) 4.0 - lam else 4.0 / (1.0 + lam) end
+define method folded-x (lam :: <real>) => (x :: <real>)
+  sqrt(lam / 2)
 end method;</textarea>
     </div>
     <div class="code-area" id="area-swift">
-      <textarea id="code-swift" spellcheck="false">// Swift: double helix + pitchfork energy
+      <textarea id="code-swift" spellcheck="false">// Swift: α-helix + pitchfork energy
 // Edit formula, Run → helix updates.
 
 func energy(at x: Double, lambda: Double) -> Double {
     pow(x, 4) - lambda * pow(x, 2)
 }
 
-func strandSeparation(lambda: Double) -> Double {
-    lambda < 0 ? 4.0 - lambda : 4.0 / (1.0 + lambda)
-}</textarea>
+var foldedX: Double { sqrt(lambda / 2) }</textarea>
     </div>
     <div style="display:flex;gap:8px;margin-top:10px">
       <button class="btn btn-primary" onclick="runCode()">▶ Run</button>
@@ -172,6 +171,8 @@ func strandSeparation(lambda: Double) -> Double {
     </div>
     <div class="run-out" id="runOutput"><span class="info">Edit code, Run. Helix updates.</span></div>
   </div>
+
+  <canvas id="landscape" width="240" height="140" title="E(x, λ) — ball sits at the chosen minimum"></canvas>
 
   <!-- Hint -->
   <div class="hint"><b>Drag</b> to rotate · <b>Scroll</b> to zoom · <b>Pinch</b> on mobile</div>
@@ -188,8 +189,8 @@ func strandSeparation(lambda: Double) -> Double {
         <input type="range" id="lambdaSlider" min="-3" max="3" step="0.01" value="-1">
       </div>
       <div class="control-group">
-        <label>Twist Rate <span id="twistVal">1.0</span></label>
-        <input type="range" id="twistSlider" min="0.5" max="2" step="0.1" value="1">
+        <label>Branch <span id="twistVal">+ folded</span></label>
+        <select id="branchSel" style="width:100%;height:28px;background:#111;color:#fff;border:1px solid #333;border-radius:6px;font-family:inherit"><option value="1">+√(λ/2) · folded (right-handed)</option><option value="-1">−√(λ/2) · misfolded (left-handed)</option></select>
       </div>
       <div class="control-group">
         <label>Speed <span id="speedVal">1.0×</span></label>
@@ -201,262 +202,193 @@ func strandSeparation(lambda: Double) -> Double {
 
 <script>
 // ===== STATE =====
-let lam = -1, speed = 1, twistRate = 1;
+// Model (ProteinFoldingBifurcation.lean): E(x, λ) = x⁴ − λx².
+// λ ≤ 0 → unique min x = 0 (unfolded); λ > 0 → minima x = ±√(λ/2).
+let lam = -1, speed = 1, branch = 1;
 let animating = false, animId = null;
 let energyFn = (x, l) => Math.pow(x, 4) - l * Math.pow(x, 2);
 let currentLang = 'self';
-let rotating = true, rotY = 0, rotX = 0.15, camDist = 16;
-let mouseDown = false, lastMX = 0, lastMY = 0;
+let rotY = 0, rotX = 0.25, camDist = 44;
+let mouseDown = false, lastMX = 0, lastMY = 0, dirty = true;
+const LAM_MAX = 3, N_RES = 36;
+const XMAX = Math.sqrt(LAM_MAX / 2);
 
-// ===== THREE.JS DOUBLE HELIX =====
-let scene, camera, renderer;
-let strand1Group, strand2Group, rungGroup, baseGroup;
+// Global minimiser of the current energyFn over a grid (so edited code drives the helix).
+function minimise(l) {
+  let best = 0, bestE = Infinity;
+  for (let i = -400; i <= 400; i++) {
+    const x = i * 0.005, e = energyFn(x, l);
+    if (e < bestE - 1e-12 || (Math.abs(e - bestE) <= 1e-12 && Math.sign(x) === branch)) { bestE = e; best = x; }
+  }
+  return { x: best, e: bestE };
+}
 
+// ===== THREE.JS α-HELIX =====
+let scene, camera, renderer, helixGroup;
 function init() {
-  const container = document.getElementById('helixView');
+  const c = document.getElementById('helixView');
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
-  scene.fog = new THREE.Fog(0x000000, 20, 45);
-  camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
-  camera.position.set(0, 2, camDist);
-  camera.lookAt(0, 0, 0);
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(container.clientWidth, container.clientHeight);
+  scene.fog = new THREE.Fog(0x000000, 30, 70);
+  camera = new THREE.PerspectiveCamera(45, c.clientWidth / c.clientHeight, 0.1, 200);
+  renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setSize(c.clientWidth, c.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  container.appendChild(renderer.domElement);
-
-  // Lights
+  c.appendChild(renderer.domElement);
   scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-  const dir1 = new THREE.DirectionalLight(0xffffff, 0.9);
-  dir1.position.set(5, 10, 7);
-  scene.add(dir1);
-  const dir2 = new THREE.DirectionalLight(0x00f0ff, 0.4);
-  dir2.position.set(-8, -5, -5);
-  scene.add(dir2);
-  const point = new THREE.PointLight(0xff00ff, 0.6, 30);
-  point.position.set(0, -8, 8);
-  scene.add(point);
+  const d1 = new THREE.DirectionalLight(0xffffff, 0.9); d1.position.set(5, 10, 7); scene.add(d1);
+  const d2 = new THREE.DirectionalLight(0x00f0ff, 0.4); d2.position.set(-8, -5, -5); scene.add(d2);
+  const p = new THREE.PointLight(0xff00ff, 0.6, 60); p.position.set(0, -12, 12); scene.add(p);
+  helixGroup = new THREE.Group(); scene.add(helixGroup);
 
-  strand1Group = new THREE.Group();
-  strand2Group = new THREE.Group();
-  rungGroup = new THREE.Group();
-  baseGroup = new THREE.Group();
-  scene.add(strand1Group, strand2Group, rungGroup, baseGroup);
-
-  // Base platform (like the 3D print in the photo)
-  const baseGeo = new THREE.CylinderGeometry(4.2, 4.8, 0.6, 8);
-  const baseMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.7, metalness: 0.3 });
-  const base = new THREE.Mesh(baseGeo, baseMat);
-  base.position.y = -8.2;
-  baseGroup.add(base);
-
-  // Mouse / touch controls
   const dom = renderer.domElement;
-  dom.addEventListener('mousedown', e => { mouseDown = true; lastMX = e.clientX; lastMY = e.clientY; });
-  document.addEventListener('mousemove', e => {
+  const start = (x, y) => { mouseDown = true; lastMX = x; lastMY = y; };
+  const move = (x, y) => {
     if (!mouseDown) return;
-    rotY += (e.clientX - lastMX) * 0.008;
-    rotX += (e.clientY - lastMY) * 0.008;
-    rotX = Math.max(-1.0, Math.min(1.0, rotX));
-    lastMX = e.clientX; lastMY = e.clientY;
-  });
+    rotY -= (x - lastMX) * 0.008;
+    rotX = Math.max(-1.2, Math.min(1.2, rotX + (y - lastMY) * 0.008));
+    lastMX = x; lastMY = y;
+  };
+  dom.addEventListener('mousedown', e => start(e.clientX, e.clientY));
+  document.addEventListener('mousemove', e => move(e.clientX, e.clientY));
   document.addEventListener('mouseup', () => mouseDown = false);
-  dom.addEventListener('wheel', e => {
-    e.preventDefault();
-    camDist = Math.max(8, Math.min(35, camDist + e.deltaY * 0.03));
-  }, { passive: false });
+  dom.addEventListener('wheel', e => { e.preventDefault(); camDist = Math.max(12, Math.min(70, camDist + e.deltaY * 0.03)); }, { passive: false });
+  let pinch = 0;
   dom.addEventListener('touchstart', e => {
-    const t = e.touches[0];
-    mouseDown = true; lastMX = t.clientX; lastMY = t.clientY;
+    if (e.touches.length === 2) pinch = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    else start(e.touches[0].clientX, e.touches[0].clientY);
   }, { passive: true });
-  document.addEventListener('touchmove', e => {
-    if (!mouseDown) return;
-    const t = e.touches[0];
-    rotY += (t.clientX - lastMX) * 0.008;
-    rotX += (t.clientY - lastMY) * 0.008;
-    rotX = Math.max(-1.0, Math.min(1.0, rotX));
-    lastMX = t.clientX; lastMY = t.clientY;
+  dom.addEventListener('touchmove', e => {
+    if (e.touches.length === 2) {
+      const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      camDist = Math.max(12, Math.min(70, camDist - (d - pinch) * 0.05)); pinch = d;
+    } else move(e.touches[0].clientX, e.touches[0].clientY);
   }, { passive: true });
   document.addEventListener('touchend', () => mouseDown = false);
 }
 
 function clearGroup(g) {
-  while (g.children.length > 0) {
+  while (g.children.length) {
     const o = g.children.pop();
-    g.remove(o);
     if (o.geometry) o.geometry.dispose();
     if (o.material) o.material.dispose();
   }
 }
 
+// Deterministic random-coil direction for residue i (no Math.random → stable frames).
+function hash(i, k) { const s = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s) - 0.5; }
+
+function backbone(h, hand) {
+  // Ideal α-helix: 3.6 residues/turn, 1.5 Å rise, 2.3 Å Cα radius.
+  const step = 2 * Math.PI / 3.6, rise = 1.5, R = 2.3, pts = [];
+  // Random coil reference: smooth wandering chain, extended along y.
+  let cx = 0, cz = 0;
+  for (let i = 0; i < N_RES; i++) {
+    cx += hash(i, 1) * 3.2; cz += hash(i, 2) * 3.2;
+    const coil = new THREE.Vector3(cx, (i - N_RES / 2) * 3.0, cz);
+    const helix = new THREE.Vector3(R * Math.cos(hand * i * step), (i - N_RES / 2) * rise, R * Math.sin(hand * i * step));
+    pts.push(coil.lerp(helix, h));
+  }
+  return pts;
+}
+
 function buildHelix() {
-  clearGroup(strand1Group);
-  clearGroup(strand2Group);
-  clearGroup(rungGroup);
-
-  const N = 48; // base pairs
-  const height = 14; // total height
-  const yStep = height / N;
-
-  // Bifurcation: how wound is the helix?
-  // lam < 0: strands separated, unwound (denatured)
-  // lam = 0: bifurcation point, strands starting to come together
-  // lam > 0: double helix forms, tighter as lam increases
-  const wound = lam < 0 ? 0 : Math.min(1, lam / 2.5); // 0 = unwound, 1 = fully wound
-  const separation = lam < 0 ? 3.5 + (-lam) * 0.8 : 3.5 * (1 - wound * 0.55); // strands apart when unwound
-  const radius = 2.2; // helix radius (when wound)
-  const totalTwist = Math.PI * 2 * 4 * twistRate * wound; // 4 full turns when wound
-  const angleStep = totalTwist / N;
-
-  const pts1 = [], pts2 = [];
-  for (let i = 0; i <= N; i++) {
-    const y = -height/2 + i * yStep;
-    const angle = i * angleStep;
-    // Strand 1: angle, Strand 2: angle + π (opposite side)
-    // When unwound (wound=0), angle=0, strands are straight lines separated by `separation`
-    const x1 = Math.cos(angle) * radius * wound + (1 - wound) * (-separation / 2);
-    const z1 = Math.sin(angle) * radius * wound;
-    const x2 = Math.cos(angle + Math.PI) * radius * wound + (1 - wound) * (separation / 2);
-    const z2 = Math.sin(angle + Math.PI) * radius * wound;
-    // Add slight jitter when unwound (random coil)
-    let jx1 = 0, jz1 = 0, jx2 = 0, jz2 = 0;
-    if (wound < 0.3) {
-      const s1 = Math.sin(i * 12.9898) * 43758.5453;
-      const s2 = Math.sin(i * 78.233) * 43758.5453;
-      const amt = (1 - wound) * 0.6;
-      jx1 = (s1 - Math.floor(s1) - 0.5) * amt;
-      jz1 = (s2 - Math.floor(s2) - 0.5) * amt;
-      jx2 = -jx1; jz2 = -jz1;
-    }
-    pts1.push(new THREE.Vector3(x1 + jx1, y, z1 + jz1));
-    pts2.push(new THREE.Vector3(x2 + jx2, y, z2 + jz2));
-  }
-
-  // Strand 1: thick backbone tube (like the 3D print)
-  const curve1 = new THREE.CatmullRomCurve3(pts1);
-  const tube1 = new THREE.Mesh(
-    new THREE.TubeGeometry(curve1, 200, 0.28, 10, false),
-    new THREE.MeshStandardMaterial({
-      color: lam < 0 ? 0xffaa00 : 0x00f0ff,
-      roughness: 0.3, metalness: 0.2,
-      emissive: lam < 0 ? 0x331a00 : 0x003333
-    })
-  );
-  strand1Group.add(tube1);
-
-  // Strand 2: thick backbone tube
-  const curve2 = new THREE.CatmullRomCurve3(pts2);
-  const tube2 = new THREE.Mesh(
-    new THREE.TubeGeometry(curve2, 200, 0.28, 10, false),
-    new THREE.MeshStandardMaterial({
-      color: lam < 0 ? 0xff6600 : 0xff00ff,
-      roughness: 0.3, metalness: 0.2,
-      emissive: lam < 0 ? 0x331000 : 0x330033
-    })
-  );
-  strand2Group.add(tube2);
-
-  // Rungs (base pairs) — only when wound enough
-  if (wound > 0.15) {
-    const rungColors = [0x00ff88, 0xffaa00, 0x00f0ff, 0xff00ff];
-    for (let i = 2; i < N; i += 2) {
-      const p1 = pts1[i], p2 = pts2[i];
-      const mid = p1.clone().lerp(p2, 0.5);
-      const dir = p2.clone().sub(p1);
-      const len = dir.length();
-      const rungGeo = new THREE.CylinderGeometry(0.12, 0.12, len, 8);
-      const rungMat = new THREE.MeshStandardMaterial({
-        color: rungColors[(i / 2) % 4],
-        roughness: 0.4, metalness: 0.1,
-        transparent: true, opacity: 0.7 + wound * 0.3
-      });
-      const rung = new THREE.Mesh(rungGeo, rungMat);
-      rung.position.copy(mid);
-      rung.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
-      rungGroup.add(rung);
+  clearGroup(helixGroup);
+  const m = minimise(lam);
+  const hand = m.x < 0 ? -1 : 1;
+  const h = Math.min(1, Math.abs(m.x) / XMAX); // helicity ∝ |x*|
+  const pts = backbone(h, hand);
+  const col = lam <= 0 ? 0xffaa00 : (hand > 0 ? 0x00f0ff : 0xff00ff);
+  const curve = new THREE.CatmullRomCurve3(pts);
+  helixGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 300, 0.35, 10, false),
+    new THREE.MeshStandardMaterial({ color: col, roughness: 0.3, metalness: 0.2, emissive: lam <= 0 ? 0x331a00 : 0x002222 })));
+  const sg = new THREE.SphereGeometry(0.55, 14, 14);
+  const ca = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+  pts.forEach(p => { const s = new THREE.Mesh(sg, ca); s.position.copy(p); helixGroup.add(s); });
+  // i → i+4 backbone hydrogen bonds, shown once the helix is mostly formed.
+  if (h > 0.6) {
+    const mat = new THREE.LineDashedMaterial({ color: 0x00ff88, dashSize: 0.3, gapSize: 0.2, transparent: true, opacity: (h - 0.6) / 0.4 });
+    for (let i = 0; i + 4 < N_RES; i++) {
+      const g = new THREE.BufferGeometry().setFromPoints([pts[i], pts[i + 4]]);
+      const l = new THREE.Line(g, mat); l.computeLineDistances(); helixGroup.add(l);
     }
   }
-
-  // Bifurcation marker at center when near λ=0
   if (Math.abs(lam) < 0.25) {
-    const marker = new THREE.Mesh(
-      new THREE.SphereGeometry(0.7, 16, 16),
-      new THREE.MeshBasicMaterial({ color: 0xff00ff })
-    );
-    marker.position.set(0, 0, 0);
-    rungGroup.add(marker);
+    const mk = new THREE.Mesh(new THREE.SphereGeometry(0.9, 16, 16), new THREE.MeshBasicMaterial({ color: 0xff00ff }));
+    helixGroup.add(mk);
   }
-
-  // Update stats
-  const turns = wound * 4 * twistRate;
-  const pairs = wound > 0.15 ? Math.floor((N - 2) / 2) : 0;
+  const turns = h * (N_RES - 1) / 3.6;
   document.getElementById('turnsStat').textContent = turns.toFixed(1);
-  document.getElementById('pairsStat').textContent = pairs;
-  document.getElementById('energyStat').textContent = energyFn(0, lam).toFixed(2);
+  document.getElementById('pairsStat').textContent = m.x.toFixed(2);
+  document.getElementById('energyStat').textContent = m.e.toFixed(2);
+  drawLandscape(m.x);
+  return { h, hand, m };
+}
+
+function drawLandscape(xs) {
+  const cv = document.getElementById('landscape'), g = cv.getContext('2d');
+  const W = cv.width, H = cv.height, X = 1.6;
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i <= 200; i++) { const e = energyFn(-X + 2 * X * i / 200, lam); lo = Math.min(lo, e); hi = Math.max(hi, e); }
+  hi = Math.min(hi, lo + 4);
+  const sx = x => (x + X) / (2 * X) * (W - 20) + 10, sy = e => H - 22 - (Math.min(e, hi) - lo) / (hi - lo || 1) * (H - 40);
+  g.clearRect(0, 0, W, H);
+  g.strokeStyle = '#555'; g.beginPath(); g.moveTo(sx(0), 8); g.lineTo(sx(0), H - 18); g.stroke();
+  g.strokeStyle = '#00f0ff'; g.lineWidth = 2; g.beginPath();
+  for (let i = 0; i <= 200; i++) { const x = -X + 2 * X * i / 200; i ? g.lineTo(sx(x), sy(energyFn(x, lam))) : g.moveTo(sx(x), sy(energyFn(x, lam))); }
+  g.stroke();
+  g.fillStyle = '#ff00ff'; g.beginPath(); g.arc(sx(xs), sy(energyFn(xs, lam)), 5, 0, 7); g.fill();
+  g.fillStyle = '#aaa'; g.font = '10px monospace'; g.fillText('E(x, λ=' + lam.toFixed(2) + ')', 10, H - 5);
 }
 
 function render() {
-  if (rotating && !mouseDown) rotY += 0.004;
-  const g = new THREE.Group();
-  // Rotate all groups together
-  [strand1Group, strand2Group, rungGroup, baseGroup].forEach(grp => {
-    grp.rotation.set(rotX, rotY, 0);
-  });
-  camera.position.set(
-    Math.sin(rotY) * Math.cos(rotX) * camDist,
-    Math.sin(rotX) * camDist + 1,
-    Math.cos(rotY) * Math.cos(rotX) * camDist
-  );
+  if (!mouseDown) rotY += 0.004;
+  camera.position.set(Math.sin(rotY) * Math.cos(rotX) * camDist, Math.sin(rotX) * camDist, Math.cos(rotY) * Math.cos(rotX) * camDist);
   camera.lookAt(0, 0, 0);
+  if (dirty) { update(); dirty = false; }
   renderer.render(scene, camera);
 }
 
 function update() {
   document.getElementById('lambdaVal').textContent = lam.toFixed(2);
   document.getElementById('lambdaStat').textContent = lam.toFixed(2);
-  document.getElementById('twistVal').textContent = twistRate.toFixed(1);
   document.getElementById('speedVal').textContent = speed.toFixed(1) + '×';
-  const banner = document.getElementById('stateBanner');
+  const r = buildHelix();
+  document.getElementById('twistVal').textContent = branch > 0 ? '+ folded' : '− misfolded';
+  const b = document.getElementById('stateBanner');
   if (lam < -0.05) {
-    banner.className = 'state-banner unfolded';
-    banner.innerHTML = '<strong>UNWOUND (λ &lt; 0)</strong>Strands separated. No helix. Denatured — like DNA melting.';
+    b.className = 'state-banner unfolded';
+    b.innerHTML = '<strong>UNFOLDED (λ &lt; 0)</strong>Random coil. Unique minimum at x = 0 (pitchfork_neg_unique_min).';
   } else if (lam > 0.05) {
-    banner.className = 'state-banner folded';
-    banner.innerHTML = '<strong>DOUBLE HELIX (λ &gt; 0)</strong>Two strands wind together. ' + (Math.min(1, lam/2.5)*100).toFixed(0) + '% wound. Base pairs formed.';
+    b.className = 'state-banner folded';
+    b.innerHTML = '<strong>' + (r.hand > 0 ? 'FOLDED' : 'MISFOLDED') + ' (λ &gt; 0)</strong>x* = ' + (r.hand > 0 ? '+' : '−') + '√(λ/2). ' +
+      (r.hand > 0 ? 'Right' : 'Left') + '-handed helix, ' + (r.h * 100).toFixed(0) + '% wound. x = 0 is now the barrier.';
   } else {
-    banner.className = 'state-banner bifurcation';
-    banner.innerHTML = '<strong>BIFURCATION (λ = 0)</strong>Strands about to wind. The double helix is forming.';
+    b.className = 'state-banner bifurcation';
+    b.innerHTML = '<strong>BIFURCATION (λ = 0)</strong>The minimum is about to split in two. The helix must choose a branch.';
   }
-  buildHelix();
 }
 
 function animLoop() {
   if (!animating) return;
-  lam += 0.02 * speed;
-  if (lam > 3) lam = -3;
+  lam += 0.01 * speed;
+  if (lam > LAM_MAX) lam = -LAM_MAX;
   document.getElementById('lambdaSlider').value = lam;
-  update();
+  dirty = true;
   animId = requestAnimationFrame(animLoop);
 }
-
 function toggleAnimation() {
   animating = !animating;
   document.getElementById('animBtn').textContent = animating ? '⏸ Pause' : '▶ Auto-Fold';
-  if (animating) animLoop();
-  else cancelAnimationFrame(animId);
+  if (animating) animLoop(); else cancelAnimationFrame(animId);
 }
-
 function resetView() {
-  lam = -1; twistRate = 1;
+  lam = -1; branch = 1; rotX = 0.25; camDist = 44;
   document.getElementById('lambdaSlider').value = -1;
-  document.getElementById('twistSlider').value = 1;
-  update();
+  document.getElementById('branchSel').value = '1';
+  dirty = true;
 }
-
-function toggleCode() {
-  document.getElementById('codePanel').classList.toggle('open');
-}
-
+function toggleCode() { document.getElementById('codePanel').classList.toggle('open'); }
 function showLang(lang, ev) {
   currentLang = lang;
   document.querySelectorAll('.lang-tab').forEach(t => t.classList.remove('active'));
@@ -464,49 +396,45 @@ function showLang(lang, ev) {
   ev.target.classList.add('active');
   document.getElementById('area-' + lang).classList.add('active');
 }
-
 function runCode() {
   const code = document.getElementById('code-' + currentLang).value;
   const out = document.getElementById('runOutput');
   try {
-    let n = 4, m = 2, coeff = 1;
-    let match = code.match(/x\s*\^\s*(\d+).*?lam\w*\s*\*\s*\(?x\s*\^\s*(\d+)/s);
-    if (match) { n = parseInt(match[1]); m = parseInt(match[2]); }
-    match = code.match(/pow\s*\(\s*x\s*,\s*(\d+)\s*\).*?lambda\s*\*\s*pow\s*\(\s*x\s*,\s*(\d+)/s);
-    if (match) { n = parseInt(match[1]); m = parseInt(match[2]); }
-    const coeffMatch = code.match(/(\d+)\s*\*\s*lam/);
-    if (coeffMatch) coeff = parseInt(coeffMatch[1]);
+    let n = null, m = null, coeff = 1, match;
+    if ((match = code.match(/x\s*\^\s*(\d+)\)?\s*-\s*\(?\s*(?:(\d+)\s*\*\s*)?lam\w*\s*\*\s*\(?\s*x\s*\^\s*(\d+)/s))) { n = +match[1]; coeff = match[2] ? +match[2] : 1; m = +match[3]; }
+    else if ((match = code.match(/pow\s*\(\s*x\s*,\s*(\d+)\s*\)\s*-\s*(?:(\d+)\s*\*\s*)?lambda\s*\*\s*pow\s*\(\s*x\s*,\s*(\d+)/s))) { n = +match[1]; coeff = match[2] ? +match[2] : 1; m = +match[3]; }
+    if (n === null) throw new Error('No energy formula found (expected x^n − λ·x^m)');
     if (n <= m) throw new Error('x^' + n + ' must be > x^' + m);
     if (n > 8 || m > 8) throw new Error('Exponents too large');
     energyFn = (x, l) => Math.pow(x, n) - coeff * l * Math.pow(x, m);
     out.innerHTML = '<span class="ok">✓ E = x^' + n + ' − ' + (coeff > 1 ? coeff + '·' : '') + 'λx^' + m + '</span><br><span class="info">' + currentLang + ' · Helix updated.</span>';
-    update();
-  } catch (err) {
-    out.innerHTML = '<span class="err">✗ ' + err.message + '</span>';
-  }
+    dirty = true;
+  } catch (err) { out.innerHTML = '<span class="err">✗ ' + err.message + '</span>'; }
 }
-
 function resetCode() {
   energyFn = (x, l) => Math.pow(x, 4) - l * Math.pow(x, 2);
   document.getElementById('runOutput').innerHTML = '<span class="info">Reset: E = x⁴ − λx²</span>';
-  update();
+  dirty = true;
 }
-
-document.getElementById('lambdaSlider').addEventListener('input', (e) => { lam = parseFloat(e.target.value); update(); });
-document.getElementById('twistSlider').addEventListener('input', (e) => { twistRate = parseFloat(e.target.value); update(); });
-document.getElementById('speedSlider').addEventListener('input', (e) => { speed = parseFloat(e.target.value); document.getElementById('speedVal').textContent = speed.toFixed(1) + '×'; });
-
+document.getElementById('lambdaSlider').addEventListener('input', e => { lam = parseFloat(e.target.value); dirty = true; });
+document.getElementById('branchSel').addEventListener('change', e => { branch = parseInt(e.target.value, 10); dirty = true; });
+document.getElementById('speedSlider').addEventListener('input', e => { speed = parseFloat(e.target.value); document.getElementById('speedVal').textContent = speed.toFixed(1) + '×'; });
 window.addEventListener('resize', () => {
-  const container = document.getElementById('helixView');
-  camera.aspect = container.clientWidth / container.clientHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(container.clientWidth, container.clientHeight);
+  const c = document.getElementById('helixView');
+  camera.aspect = c.clientWidth / c.clientHeight; camera.updateProjectionMatrix();
+  renderer.setSize(c.clientWidth, c.clientHeight);
 });
 
-init();
-update();
-(function loop() { render(); requestAnimationFrame(loop); })();
-setTimeout(() => { if (!animating) toggleAnimation(); }, 1200);
+if (typeof THREE === 'undefined') {
+  document.getElementById('helixView').innerHTML = '<p style="color:#f44;padding:120px 20px">Three.js failed to load (CDN blocked?).</p>';
+} else {
+  init();
+  const q = new URLSearchParams(location.search);
+  if (q.has('lambda')) { lam = parseFloat(q.get('lambda')); document.getElementById('lambdaSlider').value = lam; }
+  if (q.get('branch') === '-1') { branch = -1; document.getElementById('branchSel').value = '-1'; }
+  (function loop() { render(); requestAnimationFrame(loop); })();
+  if (!q.has('lambda')) setTimeout(() => { if (!animating) toggleAnimation(); }, 1200);
+}
 </script>
 </body>
 </html>
