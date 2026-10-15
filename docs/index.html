@@ -6,46 +6,45 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>Protein Folding Bifurcation — Morphic 2D World</title>
+<title>Protein Folding Bifurcation — 3D Helix Morphic World</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #08080f; }
   body { font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace; }
   #world { position: fixed; inset: 0; overflow: hidden; cursor: default; touch-action: none; }
   
-  /* Morph base */
   .morph { position: absolute; border-radius: 10px; box-shadow: 0 4px 24px rgba(0,0,0,0.5); user-select: none; -webkit-user-select: none; }
   .morph .title-bar { height: 28px; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; border-radius: 10px 10px 0 0; cursor: grab; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; }
   .morph .title-bar:active { cursor: grabbing; }
   .morph .title-bar .close { width: 18px; height: 18px; border-radius: 50%; background: #ff4444; color: #fff; font-size: 12px; line-height: 18px; text-align: center; cursor: pointer; }
-  .morph .title-bar .close:hover { background: #ff6666; }
   .morph .content { padding: 10px; overflow: auto; }
   .morph .resize-handle { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; opacity: 0.4; }
   .morph .resize-handle::after { content: ''; position: absolute; right: 4px; bottom: 4px; width: 10px; height: 10px; border-right: 2px solid #888; border-bottom: 2px solid #888; }
   .morph.dragging { z-index: 1000 !important; box-shadow: 0 8px 40px rgba(0,240,255,0.3); }
   .morph.selected { outline: 2px solid #00f0ff; outline-offset: 2px; }
 
-  /* Specific morph styles */
   .morph-world-label { position: absolute; top: 10px; left: 12px; font-size: 11px; color: #555; pointer-events: none; z-index: 1; }
   .morph-world-label strong { color: #00f0ff; }
+  .morph-helix { background: #0a0a16; border: 1px solid #00f0ff33; }
+  .morph-helix .title-bar { background: #0a1a1f; color: #00f0ff; }
   .morph-energy { background: #0a0a16; border: 1px solid #1e1e2e; }
   .morph-energy .title-bar { background: #12121f; color: #00f0ff; }
   .morph-bif { background: #0a0a16; border: 1px solid #1e1e2e; }
   .morph-bif .title-bar { background: #12121f; color: #00ff88; }
   .morph-code { background: #0a0a16; border: 1px solid #ff00ff33; }
   .morph-code .title-bar { background: #1a0a1a; color: #ff00ff; }
-  .morph-telemetry { background: #0a0a16; border: 1px solid #1e1e2e; }
-  .morph-telemetry .title-bar { background: #12121f; color: #ffaa00; }
   .morph-controls { background: #0a0a16; border: 1px solid #1e1e2e; }
   .morph-controls .title-bar { background: #12121f; color: #fff; }
 
   canvas { display: block; width: 100%; border-radius: 6px; background: #08080f; }
+  #helixCanvas { height: 100%; min-height: 300px; }
   .lang-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
   .lang-tab { padding: 6px 12px; border: 1px solid #2a2a3a; border-radius: 6px 6px 0 0; background: #12121f; color: #888; cursor: pointer; font-family: inherit; font-size: 11px; border-bottom: none; }
   .lang-tab.active { background: #1a1a2e; color: #fff; border-color: #ff00ff; }
   .code-area { display: none; }
   .code-area.active { display: block; }
-  textarea { width: 100%; height: 180px; background: #08080f; border: 1px solid #2a2a3a; border-radius: 6px; color: #d0d0d0; font-family: inherit; font-size: 11px; line-height: 1.6; padding: 8px; resize: none; }
+  textarea { width: 100%; height: 160px; background: #08080f; border: 1px solid #2a2a3a; border-radius: 6px; color: #d0d0d0; font-family: inherit; font-size: 11px; line-height: 1.6; padding: 8px; resize: none; }
   textarea:focus { outline: none; border-color: #ff00ff; }
   .btn { padding: 8px 14px; border-radius: 6px; border: none; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
   .btn-primary { background: #00f0ff; color: #000; }
@@ -62,7 +61,7 @@
   .stat .val.green { color: #00ff88; }
   .stat .val.cyan { color: #00f0ff; }
   .stat .val.pink { color: #ff00ff; }
-  .log { background: #08080f; border: 1px solid #1e1e2e; border-radius: 6px; padding: 8px; font-size: 11px; line-height: 1.7; max-height: 180px; overflow-y: auto; }
+  .log { background: #08080f; border: 1px solid #1e1e2e; border-radius: 6px; padding: 8px; font-size: 11px; line-height: 1.7; max-height: 140px; overflow-y: auto; }
   .log .e { display: flex; gap: 6px; }
   .log .t { color: #666; }
   .log .m { color: #ccc; }
@@ -72,23 +71,43 @@
   .run-out .ok { color: #00ff88; }
   .run-out .err { color: #ff4444; }
   .run-out .info { color: #888; }
-  .hint { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); border: 1px solid #2a2a3a; border-radius: 20px; padding: 8px 16px; font-size: 11px; color: #888; z-index: 1001; pointer-events: none; }
+  .hint { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); border: 1px solid #2a2a3a; border-radius: 20px; padding: 8px 16px; font-size: 11px; color: #888; z-index: 1001; pointer-events: none; white-space: nowrap; }
   .hint b { color: #00f0ff; }
+  .helix-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; font-size: 10px; color: #888; }
+  .helix-legend span { display: flex; align-items: center; gap: 4px; }
+  .helix-legend .dot { width: 10px; height: 10px; border-radius: 50%; }
 </style>
 </head>
 <body>
 <div id="world">
-  <div class="morph-world-label"><strong>◉ Morphic World</strong> — Protein Folding Bifurcation · Drag morphs to move · Drag corner to resize · Double-click title to collapse</div>
+  <div class="morph-world-label"><strong>◉ Morphic World</strong> — Protein Folding Bifurcation · 3D Helix · Drag morphs · Double-click to collapse</div>
 
-  <!-- Energy Landscape Morph -->
-  <div class="morph morph-energy" id="morph-energy" style="left:20px;top:50px;width:560px;height:400px;z-index:10">
-    <div class="title-bar"><span>⚡ Energy Landscape — E(x, λ) = x⁴ − λx²</span><span class="close" onclick="closeMorph('morph-energy')">×</span></div>
+  <!-- 3D HELIX MORPH (main) -->
+  <div class="morph morph-helix" id="morph-helix" style="left:20px;top:50px;width:620px;height:480px;z-index:10">
+    <div class="title-bar"><span>🧬 3D Alpha-Helix — Protein Folding</span><span class="close" onclick="closeMorph('morph-helix')">×</span></div>
+    <div class="content" style="height:calc(100% - 28px);padding:0">
+      <div id="helixContainer" style="width:100%;height:calc(100% - 40px);position:relative"></div>
+      <div style="padding:8px 10px">
+        <div class="helix-legend">
+          <span><div class="dot" style="background:#00ff88"></div> Helix (folded)</span>
+          <span><div class="dot" style="background:#ffaa00"></div> Coil (unfolded)</span>
+          <span><div class="dot" style="background:#00f0ff"></div> Cα atoms</span>
+          <span><div class="dot" style="background:#ff00ff"></div> Bifurcation point</span>
+        </div>
+        <p style="font-size:11px;color:#888;margin-top:4px">Drag to rotate · Scroll to zoom · λ controls helix tightness</p>
+      </div>
+    </div>
+    <div class="resize-handle"></div>
+  </div>
+
+  <!-- Energy Morph -->
+  <div class="morph morph-energy" id="morph-energy" style="left:660px;top:50px;width:420px;height:280px;z-index:11">
+    <div class="title-bar"><span>⚡ Energy — E(x, λ) = x⁴ − λx²</span><span class="close" onclick="closeMorph('morph-energy')">×</span></div>
     <div class="content" style="height:calc(100% - 28px)">
-      <canvas id="energyCanvas" width="520" height="300"></canvas>
+      <canvas id="energyCanvas" width="380" height="180"></canvas>
       <div class="stat-row">
         <div class="stat"><div class="lbl">Energy</div><div class="val cyan" id="energyVal">0.00</div></div>
         <div class="stat"><div class="lbl">Minima</div><div class="val green" id="minimaCount">1</div></div>
-        <div class="stat"><div class="lbl">Min E</div><div class="val" id="minEnergy">0.00</div></div>
         <div class="stat"><div class="lbl">Barrier</div><div class="val pink" id="barrierVal">0.00</div></div>
       </div>
     </div>
@@ -96,34 +115,33 @@
   </div>
 
   <!-- Bifurcation Morph -->
-  <div class="morph morph-bif" id="morph-bif" style="left:600px;top:50px;width:420px;height:300px;z-index:11">
-    <div class="title-bar"><span>🌿 Bifurcation Diagram — Minima vs λ</span><span class="close" onclick="closeMorph('morph-bif')">×</span></div>
+  <div class="morph morph-bif" id="morph-bif" style="left:660px;top:350px;width:420px;height:240px;z-index:12">
+    <div class="title-bar"><span>🌿 Bifurcation — Minima vs λ</span><span class="close" onclick="closeMorph('morph-bif')">×</span></div>
     <div class="content" style="height:calc(100% - 28px)">
-      <canvas id="bifCanvas" width="380" height="220"></canvas>
-      <p style="font-size:11px;color:#888;margin-top:6px">Split at λ = 0 is the bifurcation. Watch branches emerge.</p>
+      <canvas id="bifCanvas" width="380" height="160"></canvas>
     </div>
     <div class="resize-handle"></div>
   </div>
 
   <!-- Controls Morph -->
-  <div class="morph morph-controls" id="morph-controls" style="left:20px;top:470px;width:560px;height:200px;z-index:12">
+  <div class="morph morph-controls" id="morph-controls" style="left:20px;top:550px;width:620px;height:180px;z-index:13">
     <div class="title-bar"><span>🎛 Controls</span><span class="close" onclick="closeMorph('morph-controls')">×</span></div>
     <div class="content" style="height:calc(100% - 28px)">
       <div class="btn-row">
-        <button class="btn btn-primary" id="animBtn" onclick="toggleAnimation()">▶ Auto-Animate</button>
+        <button class="btn btn-primary" id="animBtn" onclick="toggleAnimation()">▶ Auto-Animate Folding</button>
         <button class="btn btn-secondary" onclick="resetView()">Reset</button>
-        <button class="btn btn-secondary" onclick="spawnMorph()">+ New Morph</button>
+        <button class="btn btn-secondary" onclick="toggleRotation()">Rotation: <span id="rotLabel">ON</span></button>
       </div>
       <div class="slider-row"><label>λ (control)</label><input type="range" id="lambdaSlider" min="-3" max="3" step="0.01" value="-1"><span id="lambdaVal">-1.00</span></div>
-      <div class="slider-row"><label>x (position)</label><input type="range" id="xSlider" min="-2.5" max="2.5" step="0.01" value="0"><span id="xVal">0.00</span></div>
+      <div class="slider-row"><label>Helix turns</label><input type="range" id="turnsSlider" min="2" max="10" step="0.5" value="6"><span id="turnsVal">6.0</span></div>
       <div class="slider-row"><label>Speed</label><input type="range" id="speedSlider" min="0.1" max="3" step="0.1" value="1"><span id="speedVal">1.0×</span></div>
-      <div id="stateBanner" style="margin-top:8px;padding:10px;border-radius:6px;font-size:12px;line-height:1.5;background:#1a0f00;border:1px solid #ffaa0033"><strong>UNFOLDED (λ &lt; 0)</strong> — Single minimum at x = 0. Protein disordered.</div>
+      <div id="stateBanner" style="margin-top:8px;padding:10px;border-radius:6px;font-size:12px;line-height:1.5;background:#1a0f00;border:1px solid #ffaa0033"><strong>UNFOLDED (λ &lt; 0)</strong> — Random coil. No helix.</div>
     </div>
     <div class="resize-handle"></div>
   </div>
 
-  <!-- Code Morph (Self / Dylan) -->
-  <div class="morph morph-code" id="morph-code" style="left:600px;top:370px;width:460px;height:420px;z-index:13">
+  <!-- Code Morph -->
+  <div class="morph morph-code" id="morph-code" style="left:1100px;top:50px;width:380px;height:400px;z-index:14">
     <div class="title-bar"><span>💜 Code — Self / Dylan (Live)</span><span class="close" onclick="closeMorph('morph-code')">×</span></div>
     <div class="content" style="height:calc(100% - 28px)">
       <div class="lang-tabs">
@@ -132,84 +150,73 @@
         <button class="lang-tab" onclick="showLang('swift',event)">Swift</button>
       </div>
       <div class="code-area active" id="area-self">
-        <textarea id="code-self" spellcheck="false">// Self: pitchfork energy prototype
-// Edit formula, Run → landscape updates.
+        <textarea id="code-self" spellcheck="false">// Self: helix + pitchfork energy
+// Edit formula, Run → helix + landscape update.
 
 energy: x Lambda: lam = (
   (x ^ 4) - (lam * (x ^ 2))
 ).
 
-// Try: (x ^ 6) - (lam * (x ^ 2))
-// Try: (x ^ 4) - (2 * lam * (x ^ 2))</textarea>
+// Helix tightness = f(λ)
+// λ < 0: coil. λ > 0: helix forms.</textarea>
       </div>
       <div class="code-area" id="area-dylan">
-        <textarea id="code-dylan" spellcheck="false">// Dylan: pitchfork energy generic
-// Edit formula, Run → landscape updates.
+        <textarea id="code-dylan" spellcheck="false">// Dylan: helix + pitchfork energy
+// Edit formula, Run → helix + landscape update.
 
 define method pitchfork-energy
     (x :: <real>, lam :: <real>) => (e :: <real>)
   (x ^ 4) - (lam * (x ^ 2))
 end method;
 
-// Try: (x ^ 6) - (lam * (x ^ 2))</textarea>
+define method helix-tightness
+    (lam :: <real>) => (t :: <real>)
+  if (lam < 0) 0.0 else lam / 3.0 end
+end method;</textarea>
       </div>
       <div class="code-area" id="area-swift">
-        <textarea id="code-swift" spellcheck="false">// Swift: pitchfork energy
-// Edit formula, Run → landscape updates.
+        <textarea id="code-swift" spellcheck="false">// Swift: helix + pitchfork energy
+// Edit formula, Run → helix + landscape update.
 
 func energy(at x: Double, lambda: Double) -> Double {
     pow(x, 4) - lambda * pow(x, 2)
 }
 
-// Try: pow(x, 6) - lambda * pow(x, 2)</textarea>
+func helixTightness(lambda: Double) -> Double {
+    lambda < 0 ? 0.0 : lambda / 3.0
+}</textarea>
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" onclick="runCode()">▶ Run → Update World</button>
         <button class="btn btn-secondary" onclick="resetCode()">Reset</button>
       </div>
-      <div class="run-out" id="runOutput"><span class="info">Edit code, click Run. The Morphic world updates from your code.</span></div>
-    </div>
-    <div class="resize-handle"></div>
-  </div>
-
-  <!-- Telemetry Morph -->
-  <div class="morph morph-telemetry" id="morph-telemetry" style="left:1080px;top:50px;width:340px;height:420px;z-index:14">
-    <div class="title-bar"><span>📡 Telemetry</span><span class="close" onclick="closeMorph('morph-telemetry')">×</span></div>
-    <div class="content" style="height:calc(100% - 28px)">
-      <div class="log" id="eventLog"></div>
-      <canvas id="trajCanvas" width="300" height="100" style="margin-top:10px"></canvas>
-      <p style="font-size:11px;color:#888;margin-top:6px">λ trajectory (last 60s)</p>
-      <canvas id="proteinCanvas" width="300" height="120" style="margin-top:10px"></canvas>
-      <p style="font-size:11px;color:#888;margin-top:6px">Protein conformation — dot falls into basin</p>
+      <div class="run-out" id="runOutput"><span class="info">Edit code, Run. Helix + landscape update.</span></div>
+      <div class="log" id="eventLog" style="margin-top:10px"></div>
     </div>
     <div class="resize-handle"></div>
   </div>
 </div>
 
-<div class="hint"><b>Drag</b> morphs by title bar · <b>Drag corner</b> to resize · <b>Double-click</b> title to collapse · <b>×</b> to close</div>
+<div class="hint"><b>Drag</b> morphs by title · <b>Drag corner</b> to resize · <b>Drag helix</b> to rotate · <b>Scroll</b> to zoom · <b>Double-click</b> title to collapse</div>
 
 <script>
-// ===== MORPHIC WORLD =====
-let zTop = 20;
-let currentLang = 'self';
-let lam = -1, xPos = 0, speed = 1;
-let animating = false, animId = null;
+// ===== STATE =====
+let lam = -1, speed = 1, turns = 6;
+let animating = false, animId = null, rotating = true;
 let energyFn = (x, l) => Math.pow(x, 4) - l * Math.pow(x, 2);
 let energyLabel = 'x⁴ − λx²';
-let lambdaHistory = [];
-let tracePoints = [];
+let currentLang = 'self';
+let zTop = 20;
 
-// --- Drag & Resize ---
+// ===== MORPHIC DRAG/RESIZE =====
 document.querySelectorAll('.morph').forEach(m => {
   const bar = m.querySelector('.title-bar');
-  let dragging = false, startX, startY, startL, startT;
+  let dragging = false, sx, sy, sl, st;
   bar.addEventListener('mousedown', e => {
     if (e.target.classList.contains('close')) return;
-    dragging = true;
-    startX = e.clientX; startY = e.clientY;
-    startL = m.offsetLeft; startT = m.offsetTop;
-    m.classList.add('dragging');
-    m.style.zIndex = ++zTop;
+    dragging = true; sx = e.clientX; sy = e.clientY;
+    sl = m.offsetLeft; st = m.offsetTop;
+    m.classList.add('dragging'); m.style.zIndex = ++zTop;
     document.querySelectorAll('.morph').forEach(x => x.classList.remove('selected'));
     m.classList.add('selected');
     e.preventDefault();
@@ -220,92 +227,205 @@ document.querySelectorAll('.morph').forEach(m => {
   });
   document.addEventListener('mousemove', e => {
     if (!dragging) return;
-    m.style.left = Math.max(0, startL + e.clientX - startX) + 'px';
-    m.style.top = Math.max(0, startT + e.clientY - startY) + 'px';
+    m.style.left = Math.max(0, sl + e.clientX - sx) + 'px';
+    m.style.top = Math.max(0, st + e.clientY - sy) + 'px';
   });
   document.addEventListener('mouseup', () => { dragging = false; m.classList.remove('dragging'); });
-  // touch
   bar.addEventListener('touchstart', e => {
     if (e.target.classList.contains('close')) return;
     const t = e.touches[0];
-    dragging = true; startX = t.clientX; startY = t.clientY;
-    startL = m.offsetLeft; startT = m.offsetTop;
+    dragging = true; sx = t.clientX; sy = t.clientY;
+    sl = m.offsetLeft; st = m.offsetTop;
     m.style.zIndex = ++zTop;
   }, {passive: true});
   document.addEventListener('touchmove', e => {
     if (!dragging) return;
     const t = e.touches[0];
-    m.style.left = Math.max(0, startL + t.clientX - startX) + 'px';
-    m.style.top = Math.max(0, startT + t.clientY - startY) + 'px';
+    m.style.left = Math.max(0, sl + t.clientX - sx) + 'px';
+    m.style.top = Math.max(0, st + e.clientY - sy) + 'px';
   }, {passive: true});
-  document.addEventListener('touchend', () => { dragging = false; });
-  // resize
+  document.addEventListener('touchend', () => dragging = false);
   const rh = m.querySelector('.resize-handle');
   if (rh) {
-    let resizing = false, rsX, rsY, rsW, rsH;
+    let resizing = false, rx, ry, rw, rh2;
     rh.addEventListener('mousedown', e => {
-      resizing = true; rsX = e.clientX; rsY = e.clientY;
-      rsW = m.offsetWidth; rsH = m.offsetHeight;
+      resizing = true; rx = e.clientX; ry = e.clientY;
+      rw = m.offsetWidth; rh2 = m.offsetHeight;
       e.preventDefault(); e.stopPropagation();
     });
     document.addEventListener('mousemove', e => {
       if (!resizing) return;
-      m.style.width = Math.max(200, rsW + e.clientX - rsX) + 'px';
-      m.style.height = Math.max(150, rsH + e.clientY - rsY) + 'px';
-      resizeCanvases();
+      m.style.width = Math.max(250, rw + e.clientX - rx) + 'px';
+      m.style.height = Math.max(180, rh2 + e.clientY - ry) + 'px';
+      onResize();
     });
     document.addEventListener('mouseup', () => resizing = false);
   }
 });
-
 function closeMorph(id) { document.getElementById(id).style.display = 'none'; }
-function spawnMorph() {
-  const id = 'morph-' + Date.now();
-  const div = document.createElement('div');
-  div.className = 'morph morph-energy';
-  div.id = id;
-  div.style.cssText = 'left:' + (100 + Math.random()*200) + 'px;top:' + (100 + Math.random()*200) + 'px;width:360px;height:240px;z-index:' + (++zTop);
-  div.innerHTML = '<div class="title-bar"><span>✦ New Morph — ' + id.slice(-4) + '</span><span class="close" onclick="closeMorph(\'' + id + '\')">×</span></div>' +
-    '<div class="content"><p style="font-size:12px;color:#aaa;line-height:1.6">A fresh morph in the world.<br>Drag it. Resize it. It lives.</p><canvas width="320" height="120"></canvas></div><div class="resize-handle"></div>';
-  document.getElementById('world').appendChild(div);
-  logEvent('New morph spawned: ' + id.slice(-4), 'hl');
-  // make draggable
-  const bar = div.querySelector('.title-bar');
-  let dragging = false, sx, sy, sl, st;
-  bar.addEventListener('mousedown', e => { if (e.target.classList.contains('close')) return; dragging = true; sx = e.clientX; sy = e.clientY; sl = div.offsetLeft; st = div.offsetTop; div.style.zIndex = ++zTop; e.preventDefault(); });
-  document.addEventListener('mousemove', e => { if (!dragging) return; div.style.left = Math.max(0, sl + e.clientX - sx) + 'px'; div.style.top = Math.max(0, st + e.clientY - sy) + 'px'; });
-  document.addEventListener('mouseup', () => dragging = false);
-  // draw mini energy in new morph
-  const c = div.querySelector('canvas');
-  const ctx = c.getContext('2d');
-  ctx.strokeStyle = '#00f0ff'; ctx.lineWidth = 2; ctx.beginPath();
-  for (let px = 0; px < c.width; px++) {
-    const x = -2.5 + (px / c.width) * 5;
-    const y = c.height - 20 - ((energy(x, lam) + 1) / 3) * (c.height - 40);
-    if (px === 0) ctx.moveTo(px, y); else ctx.lineTo(px, y);
-  }
-  ctx.stroke();
+
+// ===== THREE.JS 3D HELIX =====
+let scene, camera, renderer, helixGroup, backboneLine, caSpheres = [], hbondLines = [];
+let mouseDown = false, lastMX = 0, lastMY = 0, rotX = 0.3, rotY = 0, camDist = 14;
+
+function initHelix() {
+  const container = document.getElementById('helixContainer');
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x08080f);
+  scene.fog = new THREE.Fog(0x08080f, 15, 30);
+  camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 100);
+  camera.position.set(0, 2, camDist);
+  camera.lookAt(0, 0, 0);
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  container.appendChild(renderer.domElement);
+  // lights
+  const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+  scene.add(ambient);
+  const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+  dir.position.set(5, 10, 7);
+  scene.add(dir);
+  const point = new THREE.PointLight(0x00f0ff, 1.2, 20);
+  point.position.set(-5, 0, 5);
+  scene.add(point);
+  helixGroup = new THREE.Group();
+  scene.add(helixGroup);
+  // mouse controls
+  const dom = renderer.domElement;
+  dom.addEventListener('mousedown', e => { mouseDown = true; lastMX = e.clientX; lastMY = e.clientY; });
+  document.addEventListener('mousemove', e => {
+    if (!mouseDown) return;
+    rotY += (e.clientX - lastMX) * 0.01;
+    rotX += (e.clientY - lastMY) * 0.01;
+    rotX = Math.max(-1.2, Math.min(1.2, rotX));
+    lastMX = e.clientX; lastMY = e.clientY;
+  });
+  document.addEventListener('mouseup', () => mouseDown = false);
+  dom.addEventListener('wheel', e => {
+    e.preventDefault();
+    camDist = Math.max(6, Math.min(30, camDist + e.deltaY * 0.02));
+    camera.position.set(Math.sin(rotY) * Math.cos(rotX) * camDist, Math.sin(rotX) * camDist + 2, Math.cos(rotY) * Math.cos(rotX) * camDist);
+  }, { passive: false });
+  dom.addEventListener('touchstart', e => { const t = e.touches[0]; mouseDown = true; lastMX = t.clientX; lastMY = t.clientY; }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (!mouseDown) return;
+    const t = e.touches[0];
+    rotY += (t.clientX - lastMX) * 0.01;
+    rotX += (t.clientY - lastMY) * 0.01;
+    rotX = Math.max(-1.2, Math.min(1.2, rotX));
+    lastMX = t.clientX; lastMY = t.clientY;
+  }, { passive: true });
+  document.addEventListener('touchend', () => mouseDown = false);
 }
 
-// ===== CANVASES =====
+function buildHelix() {
+  // clear old
+  while (helixGroup.children.length > 0) {
+    const o = helixGroup.children.pop();
+    helixGroup.remove(o);
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) o.material.dispose();
+  }
+  caSpheres = []; hbondLines = [];
+  const N = 60; // residues
+  const tightness = lam < 0 ? 0 : Math.min(1, lam / 3); // 0 = coil, 1 = tight helix
+  const radius = 1.5 * tightness + 0.3; // helix radius
+  const risePerRes = 1.5; // Å per residue along axis
+  const anglePerRes = (100 * Math.PI / 180) * tightness; // 100° per residue in alpha-helix, 0 in coil
+  const points = [];
+  for (let i = 0; i < N; i++) {
+    const t = i / N;
+    // disorder increases when lam < 0 (random coil)
+    const disorder = lam < 0 ? (1 + lam / 3) * 1.2 : 0;
+    const angle = i * anglePerRes;
+    const y = (i - N/2) * risePerRes * 0.15;
+    // helix position
+    let x = Math.cos(angle) * radius;
+    let z = Math.sin(angle) * radius;
+    // add random coil jitter when unfolded
+    if (disorder > 0) {
+      const seed = i * 12.9898;
+      const rnd1 = Math.sin(seed) * 43758.5453 % 1;
+      const rnd2 = Math.sin(seed * 2) * 43758.5453 % 1;
+      x += (rnd1 - 0.5) * disorder * 3;
+      z += (rnd2 - 0.5) * disorder * 3;
+    }
+    points.push(new THREE.Vector3(x, y, z));
+  }
+  // backbone tube
+  const curve = new THREE.CatmullRomCurve3(points);
+  const tubeGeo = new THREE.TubeGeometry(curve, 200, 0.12, 8, false);
+  const tubeMat = new THREE.MeshPhongMaterial({
+    color: lam < 0 ? 0xffaa00 : (lam > 0.1 ? 0x00ff88 : 0xff00ff),
+    shininess: 80,
+    transparent: true,
+    opacity: 0.9
+  });
+  const tube = new THREE.Mesh(tubeGeo, tubeMat);
+  helixGroup.add(tube);
+  // Cα spheres
+  const sphereGeo = new THREE.SphereGeometry(0.22, 12, 12);
+  points.forEach((p, i) => {
+    const hue = (i / N) * 0.15 + (lam > 0 ? 0.35 : 0.08); // green-ish when folded, orange when coil
+    const mat = new THREE.MeshPhongMaterial({ color: new THREE.Color().setHSL(hue, 0.8, 0.55) });
+    const s = new THREE.Mesh(sphereGeo, mat);
+    s.position.copy(p);
+    helixGroup.add(s);
+    caSpheres.push(s);
+  });
+  // H-bonds (i to i+4) when helix formed
+  if (tightness > 0.3) {
+    const hbondMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.4 });
+    for (let i = 0; i < N - 4; i += 2) {
+      const geo = new THREE.BufferGeometry().setFromPoints([points[i], points[i+4]]);
+      const line = new THREE.Line(geo, hbondMat);
+      helixGroup.add(line);
+      hbondLines.push(line);
+    }
+  }
+  // bifurcation marker (center)
+  if (Math.abs(lam) < 0.2) {
+    const markerGeo = new THREE.SphereGeometry(0.5, 16, 16);
+    const markerMat = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+    const marker = new THREE.Mesh(markerGeo, markerMat);
+    marker.position.set(0, 0, 0);
+    helixGroup.add(marker);
+  }
+}
+
+function renderHelix() {
+  if (!scene) return;
+  if (rotating && !mouseDown) rotY += 0.003;
+  helixGroup.rotation.set(rotX, rotY, 0);
+  camera.position.set(Math.sin(rotY) * Math.cos(rotX) * camDist, Math.sin(rotX) * camDist + 2, Math.cos(rotY) * Math.cos(rotX) * camDist);
+  camera.lookAt(0, 0, 0);
+  renderer.render(scene, camera);
+}
+
+function onResize() {
+  const container = document.getElementById('helixContainer');
+  if (container && renderer) {
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+  }
+  resize2D();
+}
+
+// ===== 2D CANVASES =====
 const eCanvas = document.getElementById('energyCanvas');
 const bCanvas = document.getElementById('bifCanvas');
-const tCanvas = document.getElementById('trajCanvas');
-const pCanvas = document.getElementById('proteinCanvas');
 const ectx = eCanvas.getContext('2d');
 const bctx = bCanvas.getContext('2d');
-const tctx = tCanvas.getContext('2d');
-const pctx = pCanvas.getContext('2d');
+function energy(x, l) { return energyFn(x, l); }
 
-function resizeCanvases() {
-  [eCanvas, bCanvas, tCanvas, pCanvas].forEach(c => {
+function resize2D() {
+  [eCanvas, bCanvas].forEach(c => {
     const r = c.getBoundingClientRect();
     c.width = r.width; c.height = r.height;
   });
-  update();
+  update2D();
 }
-
-function energy(x, l) { return energyFn(x, l); }
 
 function drawEnergy() {
   const W = eCanvas.width, H = eCanvas.height;
@@ -316,7 +436,6 @@ function drawEnergy() {
   ectx.fillStyle = '#888'; ectx.font = '11px monospace';
   ectx.fillText('x', W-25, H-15);
   ectx.fillText('E', 22, 25);
-  ectx.fillText(energyLabel, W-150, 22);
   const xMin = -2.5, xMax = 2.5;
   let eMin = Infinity, eMax = -Infinity;
   for (let px = 40; px < W-15; px += 2) {
@@ -328,7 +447,6 @@ function drawEnergy() {
   eMax = Math.max(eMax, 1); eMin = Math.min(eMin, -1);
   const yFor = (e) => (H-30) - ((e - eMin)/(eMax-eMin)) * (H-55);
   const xFor = (x) => 40 + ((x - xMin)/(xMax-xMin)) * (W-55);
-  // fill
   ectx.beginPath(); ectx.moveTo(40, H-30);
   for (let px = 40; px <= W-15; px += 2) {
     const x = xMin + (px-40)/(W-55) * (xMax-xMin);
@@ -338,7 +456,6 @@ function drawEnergy() {
   const grad = ectx.createLinearGradient(0, 15, 0, H-30);
   grad.addColorStop(0, 'rgba(0,240,255,0.15)'); grad.addColorStop(1, 'rgba(0,240,255,0)');
   ectx.fillStyle = grad; ectx.fill();
-  // curve
   ectx.strokeStyle = '#00f0ff'; ectx.lineWidth = 2.5; ectx.beginPath();
   for (let px = 40; px <= W-15; px += 2) {
     const x = xMin + (px-40)/(W-55) * (xMax-xMin);
@@ -346,13 +463,11 @@ function drawEnergy() {
     if (px === 40) ectx.moveTo(px, y); else ectx.lineTo(px, y);
   }
   ectx.stroke();
-  // markers
   if (lam > 0.01) {
     const s = Math.sqrt(lam/2);
     [[s, '#00ff88', 7], [-s, '#00ff88', 7], [0, '#ff4444', 6]].forEach(([mx, col, r]) => {
       ectx.fillStyle = col; ectx.beginPath();
       ectx.arc(xFor(mx), yFor(energy(mx, lam)), r, 0, Math.PI*2); ectx.fill();
-      ectx.strokeStyle = '#000'; ectx.lineWidth = 2; ectx.stroke();
     });
   } else if (lam < -0.01) {
     ectx.fillStyle = '#ffaa00'; ectx.beginPath();
@@ -361,13 +476,6 @@ function drawEnergy() {
     ectx.fillStyle = '#ff00ff'; ectx.beginPath();
     ectx.arc(xFor(0), yFor(energy(0, lam)), 9, 0, Math.PI*2); ectx.fill();
   }
-  // current pos with glow
-  const cx = xFor(xPos), cy = yFor(energy(xPos, lam));
-  const glow = ectx.createRadialGradient(cx, cy, 0, cx, cy, 18);
-  glow.addColorStop(0, 'rgba(0,240,255,0.6)'); glow.addColorStop(1, 'rgba(0,240,255,0)');
-  ectx.fillStyle = glow; ectx.beginPath(); ectx.arc(cx, cy, 18, 0, Math.PI*2); ectx.fill();
-  ectx.fillStyle = '#00f0ff'; ectx.beginPath(); ectx.arc(cx, cy, 6, 0, Math.PI*2); ectx.fill();
-  ectx.strokeStyle = '#fff'; ectx.lineWidth = 1.5; ectx.stroke();
 }
 
 function drawBif() {
@@ -378,7 +486,6 @@ function drawBif() {
   bctx.beginPath(); bctx.moveTo(40, 15); bctx.lineTo(40, H-30); bctx.stroke();
   bctx.fillStyle = '#888'; bctx.font = '11px monospace';
   bctx.fillText('λ', W-25, H-15);
-  bctx.fillText('x', 22, 25);
   const lMin = -3, lMax = 3, xMin = -1.5, xMax = 1.5;
   const xFor = (l) => 40 + ((l - lMin)/(lMax-lMin)) * (W-55);
   const yFor = (x) => (H-30) - ((x - xMin)/(xMax-xMin)) * (H-55);
@@ -409,113 +516,56 @@ function drawBif() {
   bctx.arc(xFor(0), yFor(0), 6, 0, Math.PI*2); bctx.fill();
 }
 
-function drawTraj() {
-  const W = tCanvas.width, H = tCanvas.height;
-  tctx.clearRect(0, 0, W, H);
-  tctx.strokeStyle = '#1e1e2e'; tctx.lineWidth = 1;
-  tctx.beginPath(); tctx.moveTo(0, H/2); tctx.lineTo(W, H/2); tctx.stroke();
-  if (lambdaHistory.length < 2) return;
-  tctx.strokeStyle = '#00f0ff'; tctx.lineWidth = 1.5; tctx.beginPath();
-  lambdaHistory.forEach((l, i) => {
-    const x = (i / (lambdaHistory.length - 1)) * W;
-    const y = H/2 - (l / 3) * (H/2 - 8);
-    if (i === 0) tctx.moveTo(x, y); else tctx.lineTo(x, y);
-  });
-  tctx.stroke();
-}
-
-function drawProtein() {
-  const W = pCanvas.width, H = pCanvas.height;
-  pctx.clearRect(0, 0, W, H);
-  const basinY = H/2;
-  if (lam > 0) {
-    const s = Math.sqrt(lam/2);
-    const bx1 = W/2 - (s/2.5) * W/2;
-    const bx2 = W/2 + (s/2.5) * W/2;
-    let g = pctx.createRadialGradient(bx1, basinY, 0, bx1, basinY, 45);
-    g.addColorStop(0, 'rgba(0,255,136,0.4)'); g.addColorStop(1, 'rgba(0,255,136,0)');
-    pctx.fillStyle = g; pctx.beginPath(); pctx.arc(bx1, basinY, 45, 0, Math.PI*2); pctx.fill();
-    g = pctx.createRadialGradient(bx2, basinY, 0, bx2, basinY, 45);
-    g.addColorStop(0, 'rgba(255,170,0,0.3)'); g.addColorStop(1, 'rgba(255,170,0,0)');
-    pctx.fillStyle = g; pctx.beginPath(); pctx.arc(bx2, basinY, 45, 0, Math.PI*2); pctx.fill();
-    g = pctx.createRadialGradient(W/2, basinY, 0, W/2, basinY, 28);
-    g.addColorStop(0, 'rgba(255,68,68,0.5)'); g.addColorStop(1, 'rgba(255,68,68,0)');
-    pctx.fillStyle = g; pctx.beginPath(); pctx.arc(W/2, basinY, 28, 0, Math.PI*2); pctx.fill();
-  } else {
-    const g = pctx.createRadialGradient(W/2, basinY, 0, W/2, basinY, 55);
-    g.addColorStop(0, 'rgba(255,170,0,0.4)'); g.addColorStop(1, 'rgba(255,170,0,0)');
-    pctx.fillStyle = g; pctx.beginPath(); pctx.arc(W/2, basinY, 55, 0, Math.PI*2); pctx.fill();
-  }
-  const px = W/2 + (xPos / 2.5) * (W/2) + (Math.random()-0.5)*2;
-  const py = basinY + (Math.random()-0.5)*4 + Math.sin(Date.now()/300)*2;
-  const glow = pctx.createRadialGradient(px, py, 0, px, py, 16);
-  glow.addColorStop(0, 'rgba(0,240,255,0.7)'); glow.addColorStop(1, 'rgba(0,240,255,0)');
-  pctx.fillStyle = glow; pctx.beginPath(); pctx.arc(px, py, 16, 0, Math.PI*2); pctx.fill();
-  pctx.fillStyle = '#00f0ff'; pctx.beginPath(); pctx.arc(px, py, 6, 0, Math.PI*2); pctx.fill();
-  pctx.strokeStyle = '#fff'; pctx.lineWidth = 1.5; pctx.stroke();
-}
-
-function update() {
+function update2D() {
   document.getElementById('lambdaVal').textContent = lam.toFixed(2);
-  document.getElementById('xVal').textContent = xPos.toFixed(2);
+  document.getElementById('turnsVal').textContent = turns.toFixed(1);
   document.getElementById('speedVal').textContent = speed.toFixed(1) + '×';
-  const e = energy(xPos, lam);
-  document.getElementById('energyVal').textContent = isFinite(e) ? e.toFixed(3) : '∞';
-  const count = lam < -0.01 ? 1 : (lam > 0.01 ? 2 : 1);
-  document.getElementById('minimaCount').textContent = count;
-  document.getElementById('minEnergy').textContent = lam > 0 ? (-lam*lam/4).toFixed(3) : '0.00';
+  document.getElementById('energyVal').textContent = energy(0, lam).toFixed(3);
+  document.getElementById('minimaCount').textContent = lam < -0.01 ? 1 : (lam > 0.01 ? 2 : 1);
   document.getElementById('barrierVal').textContent = lam > 0 ? (lam*lam/4).toFixed(3) : '0.00';
   const banner = document.getElementById('stateBanner');
   if (lam < -0.01) {
     banner.style.background = '#1a0f00'; banner.style.border = '1px solid #ffaa0033';
-    banner.innerHTML = '<strong>UNFOLDED (λ &lt; 0)</strong> — Single minimum at x = 0. Protein disordered.';
+    banner.innerHTML = '<strong>UNFOLDED (λ &lt; 0)</strong> — Random coil. No helix. Disordered.';
   } else if (lam > 0.01) {
     banner.style.background = '#001a0f'; banner.style.border = '1px solid #00ff8833';
-    banner.innerHTML = '<strong>FOLDED / MISFOLDED (λ &gt; 0)</strong> — Two minima at x = ±' + Math.sqrt(lam/2).toFixed(3) + '. Barrier ' + (lam*lam/4).toFixed(3) + '.';
+    banner.innerHTML = '<strong>HELIX FORMED (λ &gt; 0)</strong> — Alpha-helix winds up. Tightness ' + (Math.min(1, lam/3)*100).toFixed(0) + '%.';
   } else {
     banner.style.background = '#1a001a'; banner.style.border = '1px solid #ff00ff33';
-    banner.innerHTML = '<strong>BIFURCATION (λ = 0)</strong> — Landscape about to split. Critical point.';
+    banner.innerHTML = '<strong>BIFURCATION (λ = 0)</strong> — Helix about to form. Critical point.';
   }
-  drawEnergy(); drawBif(); drawTraj(); drawProtein();
+  drawEnergy(); drawBif();
 }
 
+function update() { update2D(); buildHelix(); }
+
+// ===== ANIMATION =====
 function animLoop() {
   if (!animating) return;
   lam += 0.02 * speed;
   if (lam > 3) lam = -3;
-  if (lam > 0.1) {
-    const target = xPos >= 0 ? Math.sqrt(lam/2) : -Math.sqrt(lam/2);
-    xPos += (target - xPos) * 0.05;
-  } else {
-    xPos += (0 - xPos) * 0.05;
-  }
   document.getElementById('lambdaSlider').value = lam;
-  document.getElementById('xSlider').value = xPos;
-  lambdaHistory.push(lam);
-  if (lambdaHistory.length > 120) lambdaHistory.shift();
-  if (Math.abs(lam) < 0.05 && Math.abs(lambdaHistory[lambdaHistory.length-2] || 0) >= 0.05) {
-    logEvent('BIFURCATION CROSSED at λ ≈ 0', 'crit');
-  }
+  if (Math.abs(lam) < 0.05) logEvent('BIFURCATION CROSSED — helix forming', 'crit');
   update();
   animId = requestAnimationFrame(animLoop);
 }
-
 function toggleAnimation() {
   animating = !animating;
-  const btn = document.getElementById('animBtn');
-  btn.textContent = animating ? '⏸ Pause' : '▶ Auto-Animate';
+  document.getElementById('animBtn').textContent = animating ? '⏸ Pause' : '▶ Auto-Animate Folding';
   if (animating) { logEvent('Animation started', 'hl'); animLoop(); }
   else { logEvent('Animation paused', ''); cancelAnimationFrame(animId); }
 }
-
+function toggleRotation() {
+  rotating = !rotating;
+  document.getElementById('rotLabel').textContent = rotating ? 'ON' : 'OFF';
+}
 function resetView() {
-  lam = -1; xPos = 0; lambdaHistory = []; tracePoints = [];
+  lam = -1; turns = 6;
   document.getElementById('lambdaSlider').value = -1;
-  document.getElementById('xSlider').value = 0;
+  document.getElementById('turnsSlider').value = 6;
   logEvent('View reset', '');
   update();
 }
-
 function logEvent(msg, cls) {
   const log = document.getElementById('eventLog');
   const time = new Date().toLocaleTimeString('en-US', {hour12: false});
@@ -523,9 +573,8 @@ function logEvent(msg, cls) {
   div.className = 'e';
   div.innerHTML = '<span class="t">' + time + '</span><span class="m ' + (cls || '') + '">' + msg + '</span>';
   log.prepend(div);
-  while (log.children.length > 50) log.removeChild(log.lastChild);
+  while (log.children.length > 40) log.removeChild(log.lastChild);
 }
-
 function showLang(lang, ev) {
   currentLang = lang;
   document.querySelectorAll('.lang-tab').forEach(t => t.classList.remove('active'));
@@ -533,7 +582,6 @@ function showLang(lang, ev) {
   ev.target.classList.add('active');
   document.getElementById('area-' + lang).classList.add('active');
 }
-
 function runCode() {
   const code = document.getElementById('code-' + currentLang).value;
   const out = document.getElementById('runOutput');
@@ -545,19 +593,18 @@ function runCode() {
     if (match) { n = parseInt(match[1]); m = parseInt(match[2]); }
     const coeffMatch = code.match(/(\d+)\s*\*\s*lam/);
     if (coeffMatch) coeff = parseInt(coeffMatch[1]);
-    if (n <= m) throw new Error('x^' + n + ' must be > x^' + m + ' for pitchfork');
-    if (n > 8 || m > 8) throw new Error('Exponents too large (max 8)');
+    if (n <= m) throw new Error('x^' + n + ' must be > x^' + m);
+    if (n > 8 || m > 8) throw new Error('Exponents too large');
     energyFn = (x, l) => Math.pow(x, n) - coeff * l * Math.pow(x, m);
     energyLabel = 'x^' + n + ' − ' + (coeff > 1 ? coeff + '·' : '') + 'λx^' + m;
-    out.innerHTML = '<span class="ok">✓ E(x, λ) = x^' + n + ' − ' + (coeff > 1 ? coeff + '·' : '') + 'λx^' + m + '</span><br><span class="info">Language: ' + currentLang + ' · World updated.</span>';
-    logEvent('Code executed (' + currentLang + '): E = x^' + n + ' − ' + coeff + 'λx^' + m, 'hl');
+    out.innerHTML = '<span class="ok">✓ E = x^' + n + ' − ' + (coeff > 1 ? coeff + '·' : '') + 'λx^' + m + '</span><br><span class="info">' + currentLang + ' · Helix + landscape updated.</span>';
+    logEvent('Code (' + currentLang + '): E = x^' + n + ' − ' + coeff + 'λx^' + m, 'hl');
     update();
   } catch (err) {
     out.innerHTML = '<span class="err">✗ ' + err.message + '</span>';
     logEvent('Code error: ' + err.message, 'crit');
   }
 }
-
 function resetCode() {
   energyFn = (x, l) => Math.pow(x, 4) - l * Math.pow(x, 2);
   energyLabel = 'x⁴ − λx²';
@@ -566,22 +613,21 @@ function resetCode() {
   update();
 }
 
-document.getElementById('lambdaSlider').addEventListener('input', (e) => {
-  lam = parseFloat(e.target.value);
-  lambdaHistory.push(lam);
-  if (lambdaHistory.length > 120) lambdaHistory.shift();
-  update();
-});
-document.getElementById('xSlider').addEventListener('input', (e) => { xPos = parseFloat(e.target.value); update(); });
-document.getElementById('speedSlider').addEventListener('input', (e) => { speed = parseFloat(e.target.value); update(); });
+document.getElementById('lambdaSlider').addEventListener('input', (e) => { lam = parseFloat(e.target.value); update(); });
+document.getElementById('turnsSlider').addEventListener('input', (e) => { turns = parseFloat(e.target.value); update(); });
+document.getElementById('speedSlider').addEventListener('input', (e) => { speed = parseFloat(e.target.value); update2D(); });
+window.addEventListener('resize', onResize);
 
-window.addEventListener('resize', resizeCanvases);
-resizeCanvases();
-logEvent('Morphic world loaded — Self + Dylan', 'hl');
-logEvent('Drag morphs by title bar. Double-click to collapse.', '');
-logEvent('Ready. Click ▶ to animate.', '');
+// ===== INIT =====
+initHelix();
+resize2D();
+logEvent('3D Helix Morphic World loaded', 'hl');
+logEvent('Self + Dylan + Three.js', '');
+logEvent('Drag helix to rotate. Scroll to zoom.', '');
 update();
-setTimeout(() => { if (!animating) toggleAnimation(); }, 1000);
+// render loop
+(function loop() { renderHelix(); requestAnimationFrame(loop); })();
+setTimeout(() => { if (!animating) toggleAnimation(); }, 1200);
 </script>
 </body>
 </html>
